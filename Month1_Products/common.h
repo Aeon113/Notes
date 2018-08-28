@@ -12,7 +12,14 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
+// For sysnode
 int __init sysnode_register(void);
-void __exit sysnode_unregister(void)
+void sysnode_unregister(void);
+
+// For virtual mouse
+int __init vm_dev_register(void);
+void vm_dev_unregister(void);
+
+int translate(const char *command);
 
 #endif //COMMON_H_

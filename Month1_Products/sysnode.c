@@ -8,16 +8,18 @@
 #include <linux/errno.h>
 #include <linux/device.h>
 
+#include "common.h"
+
 // For device
-#define sysnodename "vm_sysnode";
-static device* sysdev = NULL;
+#define SYSNODENAME "vm_sysnode"
+static struct device *sysdev = NULL;
 
 // For device
 static int __init sysfolder_register(void) {
     PKN("%s: %s started...", PROJ_NAME, __PRETTY_FUNCTION__);
 
     // Allocate root device
-    sysdev = root_device_register(device_name);
+    sysdev = root_device_register(SYSNODENAME);
     if(NULL == sysdev) {
         PKW("%s: root_device_register() failed, terminating...",
         PROJ_NAME);
@@ -26,13 +28,13 @@ static int __init sysfolder_register(void) {
 
     // Now, there should be "/sys/devices/vm_sysnode/".
     PKN("%s: device allocated, at /sys/devices/%s/, device pointer: %p.",
-        PROJ_NAME, sysnodename, sysdev);
+        PROJ_NAME, SYSNODENAME, sysdev);
     return 0;
 }
 
-static void __exit sysfolder_unregister(void) {
+static void sysfolder_unregister(void) {
     PKN("%s: %s started...", PROJ_NAME, __PRETTY_FUNCTION__);
-    root_device_unregister(dev_ptr);
+    root_device_unregister(sysdev);
     PKN("%s: device unregistered, %s() terminating...",
      PROJ_NAME, __func__);
 }
@@ -40,9 +42,9 @@ static void __exit sysfolder_unregister(void) {
 
 
 // For attributes
-static device_attribute sd_attr;
+static struct device_attribute sd_attr;
 
-static static ssize_t do_write(
+static ssize_t do_write(
     struct device *dev,
     struct device_attribute *attr,
     const char *buf,
@@ -50,13 +52,13 @@ static static ssize_t do_write(
 static void __init set_sd_attr(void) {
     sd_attr.attr.name = "mattr";
     sd_attr.attr.mode = 0222; // Write-only
-    sd_attr.attr.show = NULL;
-    sd_attr.attr.store = do_write;
+    sd_attr.show = NULL;
+    sd_attr.store = do_write;
 }
 
 static int __init mattr_register(void) {
     int result = 0;
-    PKN("%s: %s started...", VIRMOUSE, __PRETTY_FUNCTION__);
+    PKN("%s: %s started...", PROJ_NAME, __PRETTY_FUNCTION__);
     set_sd_attr();
     
     result = sysfs_create_file(&sysdev->kobj, &sd_attr.attr);
@@ -67,19 +69,20 @@ static int __init mattr_register(void) {
     return result;
 }
 
-static int __exit mattr_unregister(void) {
+static void __exit mattr_unregister(void) {
     PKN("%s: %s started...", PROJ_NAME, __PRETTY_FUNCTION__);
     sysfs_remove_file(&sysdev->kobj, &sd_attr.attr);
     PKN("%s: %s() terminating...", PROJ_NAME, __func__);
 }
 
-static static ssize_t do_write(
+static ssize_t do_write(
     struct device *dev,
     struct device_attribute *attr,
     const char *buf,
     size_t count) {
-        //TODO: Not implemented yet.
-        
+        int result = translate(buf);
+
+        return !result? count : result;
     }
 
 // Combination
