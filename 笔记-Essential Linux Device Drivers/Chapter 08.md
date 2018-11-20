@@ -28,7 +28,8 @@ Kernel I2C infrastructure包括下列部分:
 | `i2c_smbus_read_word_data()` | Reads 2 bytes from the specified offset. |
 | `i2c_smbus_write_word_data()` | Sends 2 bytes to the specified offset. |
 | `i2c_smbus_read_block_data()` | Reads a block of data from the specified offset. |
-| `i2c_smbus_write_block_data()` | Sends a block of data (<= 32 bytes) to the specified offset. |    
+| `i2c_smbus_write_block_data()` | Sends a block of data (<= 32 bytes) to the specified offset. |     
+  
 ***
 下列示例代码展示了与I2C EEPROM通讯的逻辑:   
 *`Listing 8.1`: Transactions on the I2C Bus*   

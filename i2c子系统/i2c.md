@@ -259,6 +259,7 @@ __struct i2c_msg__
 |         DATA          |          |
 |                       |   ACK    |
 |           P           |          |     
+
 对于读，通常是按照下面的时序:   
 
 |        Master         |   Slave  |
@@ -276,6 +277,7 @@ __struct i2c_msg__
 |                       |   DATA   |
 |         NACK          |          |
 |           P           |          |   
+
 i2c子系统为了实现这种通信方法，为我们封装了`i2c_msg`结构，对于每一个`START`信号，都对应一个`i2c_msg`对象，实际操作中我们会将所有的请求封装成一个`struct i2c_msg[]`，一次性将所有的请求通过`i2c_transfer()`发送给匹配到的`client`的从属的`adapter`，由`adapter`根据相应的`algo`域以及`master_xfer`域通过主机驱动来将这些请求发送给硬件上的设备.    
 ***   
 ## 实例
