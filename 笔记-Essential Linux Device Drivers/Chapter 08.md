@@ -16,7 +16,8 @@ Kernel I2C infrastructure包括下列部分:
 +   Device drivers for I2C client devices.
 +   i2c-dev, which allows the implementation of user mode i2c client drivers.   
 ![Linux I2C Subsystem](c8/scs2.png)    
-由于SMBus是I2C的子集, 因此对SMBus的支持也由I2C subsystem完成. 以下是I2C Core提供的兼容SMBus和I2C的API:   
+由于SMBus是I2C的子集, 因此对SMBus的支持也由I2C subsystem完成. 以下是I2C Core提供的兼容SMBus和I2C的API:    
+
 | Function               |        Purpose                                  |
 |:-----------------------|------------------------------------------------:|
 | `i2c_smbus_read_byte()`  | Reads a single byte from the device without specifying a location offset. Uses the same offsetas the previously issued command.|

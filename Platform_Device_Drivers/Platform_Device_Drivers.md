@@ -104,7 +104,8 @@ struct platform_device {
 	/* arch specific additions */
 	struct pdev_archdata	archdata;
 };
-```  
+```     
+
 | field  | 作用                                                             |
 |:-------|----------------------------------------------------------------:| 
 | `name`   | 设备的名称，该名称在设备注册时，会拷贝到`dev.init_name`中                |

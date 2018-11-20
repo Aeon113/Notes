@@ -2,6 +2,7 @@
 ## Blocks
 A partition, disk, file or block device formatted with a Second Extended Filesystem is deviced into small groups of sectors called "blocks". These blocks are then grouped into larger units called block groups.   
 Block sizes commonly implemented include 1KiB, 2KiB, 4Kib and 8KiB.   
+
 | Upper Limits | 1KiB | 2KiB | 4KiB | 8KiB | Comments |
 |:------------:|:----:|:----:|:----:|:----:|---------:|
 | file system blocks | 2147483647 | 2147483647 | 2147483647| 2147483647 | Max of signed 4-bytes int |
