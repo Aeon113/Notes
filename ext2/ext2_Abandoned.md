@@ -31,7 +31,7 @@ They are replicated in the other blocks for the use of the filesystem checker. I
  */
 struct ext2_super_block {
 	__le32	s_inodes_count;		/* Inodes count */
-	__le32	s_blocks_count;		/* Blocks count */ /* Including the boot sector */
+	__le32	s_blocks_count;		/* Blocks count, including the boot sector.*/
 	__le32	s_r_blocks_count;	/* Reserved blocks count */ /* only the blocks reserved for superuser, boot block not included. */
 	__le32	s_free_blocks_count;	/* Free blocks count */
 	__le32	s_free_inodes_count;	/* Free inodes count */
@@ -42,7 +42,7 @@ struct ext2_super_block {
      * block, etc. Note that the fragmentation stuff (below) is not yet
      * implemented --pls */
 	__le32	s_log_frag_size;	/* Fragment size */
-	__le32	s_blocks_per_group;	/* # Blocks per group */
+	__le32	s_blocks_per_group;	/* # Blocks per group. This field is exactly 8 * block size, no matter if there are enough blocks on the disk. */
 	__le32	s_frags_per_group;	/* # Fragments per group */
 	__le32	s_inodes_per_group;	/* # Inodes per group */
 	__le32	s_mtime;		/* Mount time */
@@ -123,7 +123,7 @@ struct ext2_group_desc
 	__le16	bg_free_inodes_count;	/* Free inodes count */
 	__le16	bg_used_dirs_count;	/* Directories count */
 	__le16	bg_pad;				/* Alignment to word boundary --pls*/
-	__le32	bg_reserved[3];		/* nulls to pad out 24 bytes --pls*/
+	__le32	bg_reserved[3];		
 };
 ```      
 Each bitmap must be stored in a signle block, so the size of the block is relevant here: a 1k block can contain a bitmap mapping the states of 8192 blocks; a 4k block, 32768 blocks.   
