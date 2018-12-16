@@ -154,6 +154,8 @@ Here is a sample of a 20MiB Partition Layout.
 
 Unless the image was crafted with controlled parameters, the position of the various structures on disk (except the superblock) should never be assumed. Always load the superblock first.   
 
+Mke2fs makes a block 4k if the capacity is equal to or larger than 512m, or 1k if it is less.   
+
 --------
 # Structure of Superblock
 ``` c
