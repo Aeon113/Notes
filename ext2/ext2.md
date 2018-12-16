@@ -490,9 +490,9 @@ struct ext2_inode {
 /*
  * Special inode numbers
  */
- /*
-  * These are specially reserved inodes.
-  */
+/*
+ * These are specially reserved inodes.
+ */
 #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
 #define EXT2_ROOT_INO		 2	/* Root inode */
 #define EXT2_BOOT_LOADER_INO	 5	/* Boot loader inode */
@@ -600,3 +600,153 @@ The field "`i_links_count`" is a bit value indicating how many times this partic
 
 The i_block array ends with "0" if it is of less than 15 blocks. (_Don't know if this is right._) And after 0, all the remaining elements shall be "0" as well.      
 
+-------------
+# Locating an Inode
+To find which block group holds one inode, use:   
+`block group = (inode - 1) / s_inodes_per_group`      
+
+To find its exact position in the inode table:   
+`local inode index = (inode - 1) % s_inodes_per_group`     
+
+Here is one sample: (In which we set s_inodes_per_group = 1712)    
+
+| Inode Number       |   Block Group Number     |    Local Inode Index     |
+|:------------------:|:------------------------:|:------------------------:|
+| 1                  |           0              |             0            |
+| 963                |           0              |   962                    |
+| 1712               |           0              |   1711                   |
+| 1713               |           1              |   0                      |
+| 3424               |           1              |   1711                   |
+| 3425               |           2              |   0                      |
+
+------------------
+# Directory Structure
+Directories are stored as data block and referenced by an inode. They can be identified by the file type `S_IFDIR` stored in the `i_mode` field of the inode structure.   
+
+The second entry of the Inode table contains the inode pointing to the data of the root directory; as defined by the `EXT2_ROOT_INO` constant.   
+
+In revision 0 directories could only be stored in a linked list.   
+
+Revision 1 and later introduced indexed directories. The indexed directory is backward compatible with the linked list directory; this is achieved by inserting empty directory entry records to skip over the hash indexes.   
+
+## Linked List Directory   
+A directory file is a linked list of directory entry structures. Each structure contains the name of the entry, the inode associated with the data of this entry, and the distance within the directory file to the next entry.   
+
+In revision 0, the type of the entry (file, directory, special file, etc) has to be looked up in the inode of the file. In revision 0.5 and later, the file type is also contained in the directory entry structure.   
+
+``` c
+/*
+ * Structure of a directory entry
+ */
+
+struct ext2_dir_entry {
+	__le32	inode;			/* Inode number */
+	__le16	rec_len;		/* Directory entry length */
+	__le16	name_len;		/* Name length */
+	char	name[];			/* File name, up to EXT2_NAME_LEN */
+};
+
+/*
+ * The new version of the directory entry.  Since EXT2 structures are
+ * stored in intel byte order, and the name_len field could never be
+ * bigger than 255 chars, it's safe to reclaim the extra byte for the
+ * file_type field.
+ */
+struct ext2_dir_entry_2 {
+	__le32	inode;			/* Inode number */
+	__le16	rec_len;		/* Directory entry length */
+	__u8	name_len;		/* Name length */
+	__u8	file_type;
+	char	name[];			/* File name, up to EXT2_NAME_LEN */
+};
+
+/*
+ * Ext2 directory file types.  Only the low 3 bits are used.  The
+ * other bits are reserved for now.
+ */
+enum {
+	EXT2_FT_UNKNOWN		= 0,
+	EXT2_FT_REG_FILE	= 1,
+	EXT2_FT_DIR		= 2,
+	EXT2_FT_CHRDEV		= 3,
+	EXT2_FT_BLKDEV		= 4,
+	EXT2_FT_FIFO		= 5,
+	EXT2_FT_SOCK		= 6,
+	EXT2_FT_SYMLINK		= 7,
+	EXT2_FT_MAX
+};
+
+/*
+ * EXT2_DIR_PAD defines the directory entries boundaries
+ *
+ * NOTE: It must be a multiple of 4
+ */
+#define EXT2_DIR_PAD		 	4
+#define EXT2_DIR_ROUND 			(EXT2_DIR_PAD - 1)
+#define EXT2_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXT2_DIR_ROUND) & \
+					 ~EXT2_DIR_ROUND)
+#define EXT2_MAX_REC_LEN		((1<<16)-1)
+```    
+
+The `inode` field is a 32bit number indicates the inode number. "0" means this entry is not used.   
+
+The `rec_len` field is a 16bit unsigned displacement to the next directory entry from the start of the current directory entry. This field must have a value at least equal to the length of the current record.   
+
+The directory entries must be aligned on 4 bytes boundaries and there cannot be any directory entry spanning multiple data blocks. If an entry cannot completely fit in one block, it must be pushed to the next data block and the `rec_len` of the previous entry properly adjusted.   
+
+Since this value cannot be negative, when a file is removed the previous record within the block has to be modified to point to the next valid record within the block or to the end of the block when no other directory entry is present.   
+
+If the first entry within the block is removed, a blank record will be created and point to the next directory entry or to the end of the block.   
+
+Field `name_len` indicates the length of the name. It must never be larger than `rec_len` - 8, and usually not larger than 255. If the directory entry name is updated and cannot fit in the existing directory entry, the entry may have to be relocated in a new directory entry of sufficient size and possibly stored in a new data block.   
+
+In revision 0, `file_type` was the upper 8-bit of the then 16-bit name_len. Since all implementations still limited the file names to 255 characters this 8-bit value was always 0.    
+
+`file_type` must match the inode type defined in the related inode entry.   
+
+Here is a directory sample:   
+
+| Offset (bytes) | Size (bytes) | Description |
+|:--------------:|:------------:|:-----------:|
+| Directory Entry 0 | | |
+| 0 | 4 | inode number: 783362 |
+| 4 | 2 | record length: 12 |
+| 6 | 1 | name length: 1 |
+| 7 | 1 | file type: EXT2_FT_DIR = 2 |
+| 8 | 1 | name: . |
+| 9 | 3 | padding |
+| Directory Entry 1 | | |
+| 12 | 4 | inode number: 1109761 |
+| 16 | 2 | record length: 12 |
+| 18 | 1 | name length: 2 |
+| 19 | 1 | file type: EXT2_FT_DIR = 2 |
+| 20 | 2 | name: .. |
+| 22 | 2 | padding |
+| Directory Entry 2 | | |
+| 24 | 4 | inode number: 783364 |
+| 28 | 2 | record length: 24 |
+| 30 | 1 | name length: 13 |
+| 31 | 1 | file type: EXT2_FT_REG_FILE |
+| 32 | 13 | name: .bash_profile |
+| 45 | 3 | padding |
+| Directory Entry 3 | | |
+| 48 | 4 | inode number: 783363 |
+| 52 | 2 | record length: 16 |
+| 54 | 1 | name length: 7 |
+| 55 | 1 | file type: EXT2_FT_REG_FILE |
+| 56 | 7 | name: .bashrc |
+| 63 | 1 | padding |
+| Directory Entry 4 | | |
+| 64 | 4 | inode number: 783377 |
+| 68 | 2 | record length: 12 |
+| 70 | 1 | name length: 4 |
+| 71 | 1 | file type: EXT2_FT_REG_FILE |
+| 72 | 11 | name: mbox |
+| 72 | 1 | padding |
+| Directory Entry 5 | | |
+| 76 | 4 | inode number: 783545 |
+| 80 | 2 | record length: 20 |
+| 82 | 1 | name length: 11 |
+| 83 | 1 | file type: EXT2_FT_DIR = 2 |
+| 84 | 11 | name: public_html |
+| 95 | 1 | padding |
