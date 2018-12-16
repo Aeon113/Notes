@@ -374,3 +374,229 @@ struct ext2_super_block {
 #define EXT3_DEFM_JMODE_WBACK	0x0060
 ```   
 
+------------
+
+# Block Group Descriptor Table
+The block group descriptor is an array of block group descriptor, used to define parameters of all the block groups.   
+
+The block group descriptor table starts on the first block following the super block. This would be the third block on a 1KiB block file system, or the second block for 2KiB and larger block file systems. Shadow copies of the block group descriptor table are also stored with every copy of the superblock.   
+
+Depending on how many block groups are defined, the table can require multiple blocks of storage. Always refer to the superblock in case of doubt.   
+
+``` c
+// From fs/ext2/ext2.h
+
+/*
+ * Structure of a blocks group descriptor
+ */
+struct ext2_group_desc
+{
+	__le32	bg_block_bitmap;		/* Blocks bitmap block */
+	__le32	bg_inode_bitmap;		/* Inodes bitmap block */
+	__le32	bg_inode_table;		/* Inodes table block */
+	__le16	bg_free_blocks_count;	/* Free blocks count */
+	__le16	bg_free_inodes_count;	/* Free inodes count */
+	__le16	bg_used_dirs_count;	/* Directories count */
+	__le16	bg_pad;
+	__le32	bg_reserved[3];
+};
+```   
+
+For each block group in the system, such a group_desc is created. Each represent a single block group within the file system and the information within any one of them is pertinent only to the group it is describing. Every block group descriptor table contains all the information about all the block groups.   
+
+NOTE: All indicated "`block id`" are absolute.   
+
+-------------
+# Block Bitmap
+Each block group owns one block bitmap. It is located at the block specified by `bg_block_bitmap` of the block group descriptor.    
+
+Each bit represent the current state of a block within that blok group. where 1 means "used" and 0 "free/available". The first block of this block group is represented by bit 0 of byte 0, the second by bit 1 of byte 0. The 8th is represented by bit 7 of byte 0 while the 9th block is represented by bit 0 of byte 1.   
+
+---------------
+The "Inode Bitmap" works in a similar way as the "Block Bitmap", difference being in each bit representing an inode in the "Inode Table" rather than a block.   
+
+There is one inode bitmap per group and its location may be determined by reading the "bg_inode_bitmap" in its associated group descriptor.   
+
+When the inode table is created, all the reserved inodes are marked as used. In revision 0 this is the first 11 inodes.   
+
+------------------
+# Inode Table
+The inode table is used to keep track of every directory, regular file, symbolic link, or special file; their location, size, type and acccess rights are all stored in inodes. Therre is no filename stored in the inode itself, names are ccontained in directory files only.   
+
+There is one inode table per group and it can be located by reading the `bg_inode_table` in its associated group descriptor. There are `s_inodes_per_group` inodes per table.   
+
+Each inode contain the information about a single physical file on the system. A file can be a directory, a socket, a buffer, character or block device, symbolic link or a regular file. So an inode can be seen as a block of information related to an entity, describing its locatiion on disk, its size and its owner.   
+
+``` c
+// From fs/ext2/ext2.h
+
+/*
+ * Structure of an inode on the disk
+ */
+struct ext2_inode {
+	__le16	i_mode;		/* File mode */
+	__le16	i_uid;		/* Low 16 bits of Owner Uid */
+	__le32	i_size;		/* Size in bytes */
+	__le32	i_atime;	/* Access time */
+	__le32	i_ctime;	/* Creation time */
+	__le32	i_mtime;	/* Modification time */
+	__le32	i_dtime;	/* Deletion Time */
+	__le16	i_gid;		/* Low 16 bits of Group Id */
+	__le16	i_links_count;	/* Links count */
+	__le32	i_blocks;	/* Blocks count */
+	__le32	i_flags;	/* File flags */
+	union {
+		struct {
+			__le32  l_i_reserved1;
+		} linux1;
+		struct {
+			__le32  h_i_translator;
+		} hurd1;
+		struct {
+			__le32  m_i_reserved1;
+		} masix1;
+	} osd1;				/* OS dependent 1 */
+	__le32	i_block[EXT2_N_BLOCKS];/* Pointers to blocks */
+	__le32	i_generation;	/* File version (for NFS) */
+	__le32	i_file_acl;	/* File ACL */
+	__le32	i_dir_acl;	/* Directory ACL */
+	__le32	i_faddr;	/* Fragment address */
+	union {
+		struct {
+			__u8	l_i_frag;	/* Fragment number */
+			__u8	l_i_fsize;	/* Fragment size */
+			__u16	i_pad1;
+			__le16	l_i_uid_high;	/* these 2 fields    */
+			__le16	l_i_gid_high;	/* were reserved2[0] */
+			__u32	l_i_reserved2;
+		} linux2;
+		struct {
+			__u8	h_i_frag;	/* Fragment number */
+			__u8	h_i_fsize;	/* Fragment size */
+			__le16	h_i_mode_high;
+			__le16	h_i_uid_high;
+			__le16	h_i_gid_high;
+			__le32	h_i_author;
+		} hurd2;
+		struct {
+			__u8	m_i_frag;	/* Fragment number */
+			__u8	m_i_fsize;	/* Fragment size */
+			__u16	m_pad1;
+			__u32	m_i_reserved2[2];
+		} masix2;
+	} osd2;				/* OS dependent 2 */
+};
+
+/*
+ * Special inode numbers
+ */
+ /*
+  * These are specially reserved inodes.
+  */
+#define	EXT2_BAD_INO		 1	/* Bad blocks inode */
+#define EXT2_ROOT_INO		 2	/* Root inode */
+#define EXT2_BOOT_LOADER_INO	 5	/* Boot loader inode */
+#define EXT2_UNDEL_DIR_INO	 6	/* Undelete directory inode */
+
+/*
+ * Inode flags (GETFLAGS/SETFLAGS)
+ */
+#define	EXT2_SECRM_FL			FS_SECRM_FL	/* Secure deletion */
+#define	EXT2_UNRM_FL			FS_UNRM_FL	/* Undelete */
+#define	EXT2_COMPR_FL			FS_COMPR_FL	/* Compress file */
+#define EXT2_SYNC_FL			FS_SYNC_FL	/* Synchronous updates */
+#define EXT2_IMMUTABLE_FL		FS_IMMUTABLE_FL	/* Immutable file */
+#define EXT2_APPEND_FL			FS_APPEND_FL	/* writes to file may only append */
+#define EXT2_NODUMP_FL			FS_NODUMP_FL	/* do not dump file */
+#define EXT2_NOATIME_FL			FS_NOATIME_FL	/* do not update atime */
+/* Reserved for compression usage... */
+#define EXT2_DIRTY_FL			FS_DIRTY_FL
+#define EXT2_COMPRBLK_FL		FS_COMPRBLK_FL	/* One or more compressed clusters */
+#define EXT2_NOCOMP_FL			FS_NOCOMP_FL	/* Don't compress */
+#define EXT2_ECOMPR_FL			FS_ECOMPR_FL	/* Compression error */
+/* End compression flags --- maybe not all used */	
+#define EXT2_BTREE_FL			FS_BTREE_FL	/* btree format dir */
+#define EXT2_INDEX_FL			FS_INDEX_FL	/* hash-indexed directory */
+#define EXT2_IMAGIC_FL			FS_IMAGIC_FL	/* AFS directory */
+#define EXT2_JOURNAL_DATA_FL		FS_JOURNAL_DATA_FL /* Reserved for ext3 */
+#define EXT2_NOTAIL_FL			FS_NOTAIL_FL	/* file tail should not be merged */
+#define EXT2_DIRSYNC_FL			FS_DIRSYNC_FL	/* dirsync behaviour (directories only) */
+#define EXT2_TOPDIR_FL			FS_TOPDIR_FL	/* Top of directory hierarchies*/
+#define EXT2_RESERVED_FL		FS_RESERVED_FL	/* reserved for ext2 lib */
+
+#define EXT2_FL_USER_VISIBLE		FS_FL_USER_VISIBLE	/* User visible flags */
+#define EXT2_FL_USER_MODIFIABLE		FS_FL_USER_MODIFIABLE	/* User modifiable flags */
+
+/* Flags that should be inherited by new inodes from their parent. */
+#define EXT2_FL_INHERITED (EXT2_SECRM_FL | EXT2_UNRM_FL | EXT2_COMPR_FL |\
+			   EXT2_SYNC_FL | EXT2_NODUMP_FL |\
+			   EXT2_NOATIME_FL | EXT2_COMPRBLK_FL |\
+			   EXT2_NOCOMP_FL | EXT2_JOURNAL_DATA_FL |\
+			   EXT2_NOTAIL_FL | EXT2_DIRSYNC_FL)
+
+/* Flags that are appropriate for regular files (all but dir-specific ones). */
+#define EXT2_REG_FLMASK (~(EXT2_DIRSYNC_FL | EXT2_TOPDIR_FL))
+
+/* Flags that are appropriate for non-directories/regular files. */
+#define EXT2_OTHER_FLMASK (EXT2_NODUMP_FL | EXT2_NOATIME_FL)
+
+/* Mask out flags that are inappropriate for the given type of inode. */
+static inline __u32 ext2_mask_flags(umode_t mode, __u32 flags)
+{
+	if (S_ISDIR(mode))
+		return flags;
+	else if (S_ISREG(mode))
+		return flags & EXT2_REG_FLMASK;
+	else
+		return flags & EXT2_OTHER_FLMASK;
+}
+```   
+
+``` c
+// From include/uapi/linux/stat.h
+// For i_mode
+
+#define S_IFMT  00170000
+#define S_IFSOCK 0140000	/* socket */
+#define S_IFLNK	 0120000	/* symbolic link */
+#define S_IFREG  0100000	/* regular file */
+#define S_IFBLK  0060000	/* block device */
+#define S_IFDIR  0040000	/* directory */
+#define S_IFCHR  0020000	/* character device */
+#define S_IFIFO  0010000	/* fifo */
+#define S_ISUID  0004000	/* Set process User ID */
+#define S_ISGID  0002000	/* Set process Group ID */
+#define S_ISVTX  0001000	/* sticky biy */
+
+#define S_ISLNK(m)	(((m) & S_IFMT) == S_IFLNK)
+#define S_ISREG(m)	(((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)
+#define S_ISCHR(m)	(((m) & S_IFMT) == S_IFCHR)
+#define S_ISBLK(m)	(((m) & S_IFMT) == S_IFBLK)
+#define S_ISFIFO(m)	(((m) & S_IFMT) == S_IFIFO)
+#define S_ISSOCK(m)	(((m) & S_IFMT) == S_IFSOCK)
+
+#define S_IRWXU 00700	/* user read, write, execute */
+#define S_IRUSR 00400	/* user read */
+#define S_IWUSR 00200	/* user write */
+#define S_IXUSR 00100	/* user execute */
+
+#define S_IRWXG 00070	/* group read, write, execute */
+#define S_IRGRP 00040	/* group read */
+#define S_IWGRP 00020	/* group write */
+#define S_IXGRP 00010	/* group execute */
+
+#define S_IRWXO 00007	/* others read, write, execute */
+#define S_IROTH 00004	/* others read */
+#define S_IWOTH 00002	/* others write */
+#define S_IXOTH 00001	/* others execute */
+
+
+```    
+
+The first few entries of the inode tables are reserved. In revision 0 there are 11 entries reserved while in revision 1 (EXT2_DYNAMIC_REV) and later the number of reserved inodes entries is specified in the s_first_ino of the superblock structure.   
+
+The field "`i_links_count`" is a bit value indicating how many times this particular inode is linked (referred to). Most files will have a link count of 1. Files with hard links pointing to them will have an additional count for each hard link. Symbolic links do not affect the link count of an inode. When the link count reaches 0 the inode and all its associated blocks are freed.      
+
+The i_block array ends with "0" if it is of less than 15 blocks. (_Don't know if this is right._) And after 0, all the remaining elements shall be "0" as well.      
+
