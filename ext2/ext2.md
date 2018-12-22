@@ -741,8 +741,8 @@ Here is a directory sample:
 | 68 | 2 | record length: 12 |
 | 70 | 1 | name length: 4 |
 | 71 | 1 | file type: EXT2_FT_REG_FILE |
-| 72 | 11 | name: mbox |
-| 72 | 1 | padding |
+| 72 | 4 | name: mbox |
+| 72 | 0 | padding |
 | Directory Entry 5 | | |
 | 76 | 4 | inode number: 783545 |
 | 80 | 2 | record length: 20 |
@@ -750,3 +750,17 @@ Here is a directory sample:
 | 83 | 1 | file type: EXT2_FT_DIR = 2 |
 | 84 | 11 | name: public_html |
 | 95 | 1 | padding |
+| Directory Entry 6 | | |
+| 96 | 4 | inode number: 669354 |
+| 100 | 2 | record length: 12 |
+| 102 | 1 | name length: 3 |
+| 103 | 1 | file type: EXT2_FT_DIR = 2 |
+| 104 | 3 | name: tmp |
+| 107 | 1 | padding |
+| Directory Entry 7 | | |
+| 108 | 4 | inode number: 0 |
+| 112 | 2 | record length: 3988 |
+| 114 | 1 | name length: 0 |
+| 115 | 1 | file type: EXT2_FT_UNKNOWN |
+| 116 | 0 | name: |
+| 116 | 3980 | padding |
