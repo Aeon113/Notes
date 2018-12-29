@@ -238,3 +238,5 @@ i_flags:
 ### Reserved GDT Blocks:   
 保存用于扩充GDT的blocks，他们均跟在GDT之后。每个GDT之后的数量均相同。一般大小为，可以将GDT扩充为当前大小的1024倍。   
 
+### 补充
+每次建立新inode，应对i_generation赋予随机值，并在每次写入inode或其内文件时，将其自增。
