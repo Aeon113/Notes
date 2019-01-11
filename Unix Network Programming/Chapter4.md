@@ -76,7 +76,7 @@ int connect(int sockfd, const struct sockaddr *servaddr, socklen_t addrlen);
 | 0 | OK |
 | ETIMEDOUT | The server does not respond. (On 4.4BSD if the client does not get a ACK from server after 75 seconds from the sending of SYN, this value is returned) |
 | ECONNREFUSED | The server sends a reset (RST) back, in order to reject the connection. |
-| EHOSTUNREACH/ENETUNREACH | When ICMP "destination unreachable" returned, it is considered a "soft error". The kernel keeps sending SYN. After a fixed time of trying (75 seconds on 4.4BSD), if it is still failed, it returns this value. And, the `ENETUNREACH` is obsolete now. |
+| EHOSTUNREACH/ENETUNREACH | When ICMP "destination unreachable" returned, it is considered a "soft error". The kernel keeps sending SYN. After a fixed time of trying (75 seconds on 4.4BSD), if it is still failed, it returns this value. And, the `ENETUNREACH` is obsolete now. |
 
 Function `connect` moves the TCP state from `CLOSED` to `SYN_SENT`. If it succeeds, the state is moved to `ESTABLISHED`. If it fails, this socket is no longer usable and closed.   
 
