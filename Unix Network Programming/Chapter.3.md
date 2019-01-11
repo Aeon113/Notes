@@ -171,9 +171,9 @@ Linux/Unix 提供了4个函数用于数据在主机端序和网络端序间的�
 字符串与网络地址的互换:   
 UNIX提供了`inet_aton`, `inet_addr`, `inet_ntoa`, `inet_pton`, `inet_ntop`这5个函数用于c-style ip-address string 与 `in_addr`, `in6_addr` 之间的相互转换. 但 Linux 内核中没有相应的函数, 他们被定义在 `libc6-dev` 中.   
 
-函数 `sock_ntop` 与 inet_ntop的功能类似,都是将128-bit或32-bit的ip地址转化为字符串. 但是他们的接受的参数并非 `in_addr` 或 `in6_addr` 类型, 而是一个socket和一个`socklen_t` 类型的 `addrlen`. 指示这两个参数后, `sock_ntop` 将自行从 socket 中取出地址并转换成相应的字符串.   
+函数 `sock_ntop` 与 inet_ntop的功能类似,都是将128-bit或32-bit的ip地址转化为字符串. 但是他们接受的参数并非 `in_addr` 或 `in6_addr` 类型, 而是一个socket和一个`socklen_t` 类型的 `addrlen`. 指示这两个参数后, `sock_ntop` 将自行从 socket 中取出地址并转换成相应的字符串.   
 
 具体可见 UNP Section 3.6 ~ 3.8.   
 
-对 stream socket (比如 TCP socket) 的读写与对一般流的读写不同.其读出或写入的字节数经常会小于我们指定的字节数. 这与buffer size等等机制有关. 遇到这种情况, 可以多次读出或写入, 直到所有数据均被传输.   
+对 stream socket (比如 TCP socket) 的读写与对一般流的读写不同.其读出或写入的字节数经常会小于我们指定的字节数. 这与buffer size等等机制有关. 遇到这种情况, 可以多次读出或写入, 直到所有数据均被传输.   
 
