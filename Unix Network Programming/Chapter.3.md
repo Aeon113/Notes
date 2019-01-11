@@ -36,7 +36,7 @@ POSIX requires only three menbers in `sockaddr_in`: `s_addr` of type `in_addr_t`
 
 `sockaddr_in`内的addr和port number均应为网络字节序(Network Byte Order, NBO), 即大端序.   
 
-The reason for defining `in_addr` a struct is historical, we must be clear that both `sin_addr` and `sin_addr.s_addr` of a `sockaddr_in` object do reference the IPv4 address correctly.   
+The reason for defining `in_addr` a struct is historical, we must be clear that both `sin_addr` and `sin_addr.s_addr` of a `sockaddr_in` object do reference the IPv4 address correctly.   
 
 `sin_zero` member is unused, but always set to 0. It is common to set all bytes within a `sockaddr_in` to 0 before using it, not only `sin_zero`.    
 
