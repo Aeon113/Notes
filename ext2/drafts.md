@@ -205,7 +205,7 @@ i_flags:
 | EXT2_SYNC_FL | 0x00000008 | The file's content in memory will be constantly synchronized with the content on disk, 支持，行为：在写入、移动、删除此object后立即执行sync |
 | EXT2_IMMUTABLE_FL | 0x00000010 | 任何用户，包括super user，都无法编辑，重命名，移动，删除此文件。支持。用户可以为object增加此属性，也可移除此属性 |
 | EXT2_APPEND_FL | 0x00000020 | 只能在文件尾部追加，不能修改。支持，视作只读文件。 |
-| EXT2_NODUMP_FL | 0x00000040 | 不能抹除object content，即使 i_links_count == 0，支持。 |
+| EXT2_NODUMP_FL | 0x00000040 | Linux dump备份时忽略此inode。 |
 | EXT2_NOATIME_FL | 0x00000080 | 不update atime，支持 |
 | EXT2_DIRTY_FL | 0x00000100 | Dirty标记，表明此inode内信息未完全写入。支持。行为：在每次修改inode信息前都会set此标记，在inode信息写入完成后unset。在读取inode时，若发现dirty标记，则尝试恢复：恢复行为待定无法恢复就在当前dirent内删除此inode的link，直到inode内links为0后删除此inode。|
 | EXT2_COMPRBLK_FL | 0x00000200 | 指仅有部分data block被压缩。不应出现，若发现，则不能读取和写入，只能移动，重命名和删除。 |
