@@ -2,7 +2,7 @@
 
 referenced: [Understanding Flash: The Flash Translation Layer | flashdba](https://flashdba.com/2014/09/17/understanding-flash-the-flash-translation-layer/)    
 
-When dealing with the flash, we call the "write" operation "program".   
+When dealing with the flash, we call the "write" operation "program". After one unit is programed, it cannot be reprogramed unless it's "erase"d.   
 
 ## Logical Block Mapping
 `LBA (Logical Block Mapping)` is like paging, it redirects the block addressing. The block address exposed to the upper layer, is a virtual block address. When an adressing request is delivered to it, it transfer this virtual address to a physical one.    
