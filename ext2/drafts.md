@@ -154,7 +154,7 @@ s_feature_ro_compat:
 
 | 宏 |  值   | 行为  |
 |:----|:-----:|-----:|
-| EXT2_FEATURE_RO_COMPAT_SUPER | 0x0001 | 稀疏superblock, 支持。set时，在block group 0, 1, 以及 3、5、7的幂内存储super block 以及 group description table; unset时在所有block group内存储上述信息。 |
+| EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER | 0x0001 | 稀疏superblock, 支持。set时，在block group 0, 1, 以及 3、5、7的幂内存储super block 以及 group description table; unset时在所有block group内存储上述信息。 |
 | EXT2_FEATURE_RO_COMPAT_LARGE_FILE | 0x0002 | 64-bit 文件大小，支持。 |
 | EXT2_FEATURE_RO_BTREE_DIR | 0x0004 | 不支持，只读挂载 |   
 
