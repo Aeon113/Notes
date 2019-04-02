@@ -15,12 +15,12 @@ With a great algorithm, the FTL may increase the lifespan of a flash memory devi
 With the three components mentioned above, a flash translation layer is available to redirect the writes to some blocks, to other blocks, in order to maximize the lifespan of the whole device.     
 
 ## Logical Block Mapping
-`LBA (Logical Block Mapping)` is like paging, it redirects the block addressing. The block address exposed to the upper layer, is a virtual block address. When an adressing request is delivered to it, it transfer this virtual address to a physical one.    
+`Logical Block Mapping` is like paging, it redirects the block addressing. The block address exposed to the upper layer, is a virtual block address. When an adressing request is delivered to it, it transfer this virtual address to a physical one.    
 The virtual address may not be mapped to the same physical address in two addressings.   
-In FTL, LBA is mainly used to redirect the writing to a block to another block. Since a NAND block cannot be reprogramed without erasing, and each block can survive only a limited number of PE cycles, this mechanism is helpful to balance the life of a NAND flash device.   
+In FTL, logical block mapping is mainly used to redirect the writing to a block to another block. Since a NAND block cannot be reprogramed without erasing, and each block can survive only a limited number of PE cycles, this mechanism is helpful to balance the life of a NAND flash device.   
 
 ## Wear Levelling
-Since a block can only endure a limited number of PE cycles, it is necessary to balance the PE cycles performed on each block, otherwise some of them may ran out of their lives while others still remain healthy. With the assistance of LBA, it is possible to balance the lives of the blocks. This mechanism is named `wear levelling`.   
+Since a block can only endure a limited number of PE cycles, it is necessary to balance the PE cycles performed on each block, otherwise some of them may ran out of their lives while others still remain healthy. With the assistance of logical block mapping, it is possible to balance the lives of the blocks. This mechanism is named `wear levelling`.   
 
 ## Garbage Collection
 It is necessary to collect the pages which are on longer required (invalid) but have not yet been erased.   
