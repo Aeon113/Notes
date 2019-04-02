@@ -20,4 +20,5 @@ And, a flash chip can only survive a limited number of times of `program erase c
 
 An `erase` operation takes longer time than `read` and `program` does.   
 
-文章最后给出了一个note: 一个空的page内部，所有数据都是1. 写入的过程即是将部分数据由1变为0的过程，例如将11111111变为11110000. 对于数据11110000，如果需要将其改变为00110000，由于需要被改变的部分都是1，因此无需对其进行erase，直接program即可。    
+文章最后给出了一个note: 一个空的page内部，所有数据都是1. 写入的过程即是将部分数据由1变为0的过程。例如，将11111111变为11110000. 对于数据11110000，如果需要将其改变为00110000，由于需要被改变的部分都是1，因此无需对其进行erase，直接program即可（对于SLC）。    
+
