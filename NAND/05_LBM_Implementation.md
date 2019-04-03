@@ -19,3 +19,5 @@ For logical block mapping, there can be two tables: direct mapping, maps the log
 
 It is possible to set a limit to each physical page (sector), allowing them only to map one of a specific range of logical pages (like NUMA). This increases the searching (if we do not store direct map, only search the inverse map sequencially), but reduces the flexibility of the mapping and the endurance of the device.     
 
+It is said that the block-mapping is of two stages: virtual block => logical block, logical block => physical block. Don't know the reason for this.   
+
