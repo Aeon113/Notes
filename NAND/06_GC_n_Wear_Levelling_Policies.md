@@ -69,3 +69,14 @@ This strategy is called `CICL`, and it uses another formula:
 In this formular, λ is not a constant, it's a monotonic function that depends on the discrepancy between the most and the least worn out units:   
 ![score 5](pics/score_5.png)   
 
+## Strategy #11
+Realtime GC.   
+
+Like the `real time` concept in operating systems, it just means that the time to perform a GC is predictable.   
+
+Every task (read, write) is associated with a GC process, which may reclaim zero or one block. The amount of the reclaimed blocks in one turn of GC is 0 if the free sectors left are larger than the threshold; otherwise it reclaims the very block with the least amount of valid data.   
+
+So the GC associated with the tasks may be performed, or just skiped.   
+
+If we set `α = invalid_sectors_amount_in_this_device / total_sectors_amount_in_this_device`, and we define `β = invalid_sectors_amount_in_one_block / total_sectors_amount_in_one_block` for every block, there must be one block, for which β > α. And if we reclaim it, α will decrease. So if there is enough space, we can maintain the invalid sectors count of our flash device under one threshold.    
+

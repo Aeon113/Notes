@@ -19,7 +19,7 @@ Be noted that the reserved blocks are not dedicated. Blocks are dynamically mark
 
 
 ## Write Cliff
-referenced: [Understanding Flash: The Write Cliff](https://flashdba.com/2014/11/24/understanding-flash-the-write-cliff/)   
+referenced: [Understanding Flash: The Write Cliff | flashdba](https://flashdba.com/2014/11/24/understanding-flash-the-write-cliff/)   
 
 Since we have to store the accompanied pages somewhere else when erasing one, it is possible that we have to queue a bunch of readings before we actually perform the erasing.   
 
@@ -27,7 +27,7 @@ A flash die (sometimes a plane) can only perform one operation at a time. So whe
 
 Compared to the read and write operation, erases are very slow. For MLC a read takes ~50 microseconds while an erase takes about 3 milliseconds.   
 
-So if it is necessary to perform a garbage collection, the device will be unable to respond the requests immediately, including the queued ones. A sharp performance decrease may occur. This phenomenon is named `write cliff`.     
+So if it is necessary to perform a garbage collection, the device will be unable to respond the requests immediately, including the queued ones. A sharp performance decrease may occur. Since it usually comes along with a write request (writes may cause GCs), this phenomenon is named `write cliff`.     
 
 So, the GC must be scheduled. If one GC does not affect the performance exposed to the users, it is named as `background garbage collection (BGC)`. But if the writes happen too often that BGC cannot keep up with, `active gargabe collections (AGC, or described as foreground garbage collection)` come out.   
 
