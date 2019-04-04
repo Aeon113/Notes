@@ -7,8 +7,6 @@ referenced: [Understanding Flash: SLC, MLC and TLC | flashdba](https://flashdba.
 若一个cell可以表示3个比特，我们就称其为TLC（Three Level Cell）。   
 ![slc, mlc, tlc buckets](pics/slc-mlc-tlc-buckets.jpg)      
 
-Since MLC and TLC requires more accuracy in the measurements of voltage, use of them deivers higher error rates and lower endurance(the number of program / erase cycles that can be sustained).   
-
-由上段论述，我们可以得到关于SLC、MLC、TLC性能的猜测。下图也验证了此猜测。   
+Since MLC and TLC requires more accuracy in the measurements of voltage, use of them delivers higher error rates and lower endurance(the number of program / erase cycles that can be sustained), and lower speed.   
 ![slc mlc tlc performance chart](pics/slc-mlc-tlc-performance-chart.jpg)   
 

@@ -4,7 +4,7 @@ referenced: [Understanding Flash: The Flash Translation Layer | flashdba](https:
 
 When dealing with the flash, we call the "write" operation "program". After one unit is programed, it cannot be reprogramed unless it's "erase"d.   
  
-`NAND Flash Translation Layer (NFTL)` is a mechanism used to maximize the lifespan of a NAND flash memory device.   
+`NAND Flash Translation Layer (NFTL)` is a mechanism used to maximize the lifespan of, and accelate the read/write operations on a NAND flash memory device.   
 A `Flash Translation Layer` simply do the following three jobs:   
 1.	Write updated information to a new empty page and then divert all subsequent read requests to its new address.
 2.	Ensure that newly-programmed pages are evenly distributed across all of the available flash so that it wears evenly.
