@@ -54,3 +54,17 @@ Lit FAT, nearly everything is represented with a likned list, including the dire
 When some where in the file is updated, a __patch__ is generated, and the updated node's corresponding data is modified:   
 ![MFFS Patches](pics/MFFS_2.png)   
 
+As more and more updates performed, the list of one file is getting longer and longer, which slows down the operations.    
+
+Later version of FFS allowed reclamation of erase units. By associating each data block with a small descriptor (about 6 bytes), the reclamation can be achieved.   
+
+The descriptors contain the offset of the data block associated within this unit, the size of the block, and whether it is valid or obsolete.   
+
+Pointers within the filesystem to data blocks are not physical pointers, but concatenation of a logical erase-unit number and a block number within the unit. The block number is the index of the descriptor of the block. This allows the actual blocks to be moved and compacted when the unit is reclaimed; only the valid descriptors need to retain their position in the new block. This does not cause much fragmentation, because descriptors are small and uniform in size.   
+
+Space for data is allocated from the low end of the unit to the top end, and the fixed-size descriptors are allocated from the top end to the lowend.    
+
+It is possible to actively reclaim the useless records inside one linked list, but it can also be down with a GC process. When GC happens, just directly replace the old record's data with the new record's data, and then mark the new one obsolete.   
+
+This fs is highly NOR specific.   
+
