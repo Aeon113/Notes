@@ -1296,7 +1296,7 @@ With the aid of that spinlock, each time the request handler is executed, it is 
 
 The time to invoke this handler is determine by the kernel. So the I/O requests issued by the kernel or user processes may not be immediately performed. This is for the sake of performance. As stated above, the I/O on a block device, like HDD, is very slow, and there is an I/O scheduler who's responsible to organize the requests. So it is necessary to execute the handler asynchronously.   
 
-Since the handler is executed asynchronousely, there is no guarantee that under which process's context the code is running. Which means, the buffer related to the request may belong to any user process. Furthermore, the address may not belong to user-space, it may comes from the kernel space. As a consequence, the buffer address in the request can not be trusted.   
+Since the handler is executed asynchronousely, there is no guarantee that under which process's context the code is running. Which means, the buffer related to the request may belong to any user process. Furthermore, the address may not belong to user-space, it may comes from the kernel space. So every time we add some buffer into a request, it's best for us to transform it into physical address.      
 
 Here is one example of a request handler:   
 
@@ -1474,4 +1474,64 @@ bio->bi_iter.bi_sector = sector;
 bio_set_op_attrs(bio, REQ_OP_READ, 0);
 bio_add_page(bio, page, size, offset);
 //...
-```
+```   
+
+------------------------
+
+## How to use the content of a `struct bio` strcuture
+If we can be sure that the addresses we inserted into the `struct bio` are physical, we can use `kmap_atomic()` and `kunmap_atomic()` to map and unmap them.   
+
+``` c
+static void my_block_transfer(struct my_block_dev *dev, size_t start,
+                              size_t len, char *buffer, int dir);
+
+
+static int my_xfer_bio(struct my_block_dev *dev, struct bio *bio)
+{
+    int i;
+    struct bio_vec bvec;
+    struct bvec_iter i;
+    int dir = bio_data_dir(bio);
+
+    /* Do each segment independently. */
+    bio_for_each_segment(bvec, bio, i) {
+        sector_t sector = i.bi_sector;
+        char *buffer = kmap_atomic(bvec.bv_page);
+        unsigned long offset = bvec.bv_offset;
+        size_t len = bvec.bv_len;
+
+        /* process mapped buffer */
+        my_block_transfer(dev, sector, len, buffer + offset, dir);
+
+        kunmap_atomic(buffer);
+    }
+
+    return 0;
+}
+
+```   
+
+If you want to get all the `struct bio_vec`s with one `for`, you can use `rq_for_each_segment`:    
+
+``` c
+struct bio_vec bvec;
+struct req_iterator iter;
+
+rq_for_each_segment(bvec, req, iter) {
+    sector_t sector = iter.iter.bi_sector;
+    char *buffer = kmap_atomic(bvec.bv_page);
+    unsigned long offset = bvec.bv_offset;
+    size_t len = bvec.bv_len;
+    int dir = bio_data_dir(iter.bio);
+
+    my_block_transfer(dev, sector, len, buffer + offset, dir);
+
+    kunmap_atomic(buffer);
+}
+```   
+
+------------------
+
+## Free a `struct bio` structure   
+We can use `bio_put()` to free a `struct bio`.   
+
