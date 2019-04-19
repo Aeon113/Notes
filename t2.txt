@@ -1,0 +1,21 @@
+sudo vi /etc/yum.repos.d/google-chrome.repo
+
+添加:
+[google-chrome]
+name=google-chrome
+baseurl=http://dl.google.com/linux/chrome/rpm/stable/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
+或者
+[google-chrome]
+name=google-chrome
+baseurl=http://dl.google.com/linux/chrome/rpm/stable/$basearch
+enabled=1
+gpgcheck=0
+gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
+
+查看信息:
+sudo yum info google-chrome-stable
+
+sudo dnf install google-chrome-stable

@@ -1,0 +1,45 @@
+# https://dacat.cc/543.html
+
+yum update
+
+yum install build-essential
+ 
+yum install epel-release
+ 
+yum install dnf
+ 
+wget -P /etc/yum.repos.d/ https://copr.fedoraproject.org/coprs/jkastner/dnf-plugins-core/repo/epel-7/jkastner-dnf-plugins-core-epel-7.repo && yum install dnf-plugins-core
+ 
+yum install qt5-qtbase-devel
+ 
+dnf copr enable librehat/shadowsocks
+ 
+dnf update
+ 
+dnf install shadowsocks-qt5
+
+dnf -y install adobe-source-code-pro-fonts
+
+dnf install gcc
+
+dnf install gcc-c++
+
+dnf install -y git
+
+cd /opt
+
+git clone https://github.com/haad/proxychains
+
+cd proxychains/
+
+./configure
+
+make
+
+install -d /usr/local/bin /usr/local/lib /usr/local/etc/ /usr/local/include
+
+install -D -m 755 proxychains4 /usr/local/lib
+
+install -D -m 644 libproxychains4.so /usr/local/lib
+
+cp src/proxychains.conf /etc/
