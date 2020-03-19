@@ -89,9 +89,7 @@ Kernel threads are standard processes that exist solely in kernel-space. They ar
 
 The significant difference between kernel threads and normal processes is that kernel threads do not have an address space. (Their `mm` pointer, which points at their address space, is `NULL`.) They operate only in kernel-space and do not context switch into user-space. Kernel threads, however are schedulable and preemptable, the same as normal processes.       
 
-The linux kernel itself delegates some tasks,  such as the *flush* task and the *ksoftirqd* task, to kernel threads as well.      
-
-One can check the kernel threads on the system by `ps -ef`.     
+The linux kernel itself delegates some tasks,  such as the *flush* task and the *ksoftirqd* task, to kernel threads as well.       
 
 -------------------------------------
 
@@ -105,3 +103,62 @@ struct task_struct *kthread_create(int (*threadfn) (void *data),
                                             ...)
 ```
 
+It creates and returns a kernel thread which will execute the `threadfn`. This thread is created in an unrunnable state; it will not start running until explicitly woken up via `wake_up_process()`. A macro named `kthread_run()` combines the creation and waking up.     
+
+``` c
+#define kthread_run(threadfn, data, namefmt, ...)			   \
+({									   \
+	struct task_struct *__k						   \
+		= kthread_create(threadfn, data, namefmt, ## __VA_ARGS__); \
+	if (!IS_ERR(__k))						   \
+		wake_up_process(__k);					   \
+	__k;								   \
+})
+```
+
+-------------------
+
+A process may terminates voluntarily or involuntarily.     
+
++ Voluntarily: It occurs when the process calls the `exit()` system call, either explicitly or implicitly (That is, the C compiler places a call to exit() after main() returns).     
++ Involuntarily: This occurs when the process receives a signal or exception it cannot handle or ignore.     
+
+--------------------
+
+Regardless of how a process terminates, the bulk of the work is handled by `do_exit()`, defined in `kernel/exit.c`, which completes a number of chores:    
+1. It sets the `PF_EXITING` flag in the flags member of the `task_struct`.
+2. It calls `del_timer_sync()` to remove any kernel timers. Upon return, it is guaranteed that no timer is queued and that no timer handler is running.
+3. If BSD process accounting is enabled, `do_exit()` calls `acct_update_integrals()` to write out accounting information.
+4. It calls `exit_mm()` to release the `mm_struct` held by this process. If no other process is using this address space — that it, if the address space is not shared — the kernel then destroys it.
+5. It calls `exit_sem()`. If the process is queued waiting for an IPC semaphore, it is dequeued here.
+6. It then calls `exit_files()` and `exit_fs()` to decrement the usage count of objects related to file descriptors and filesystem data, respectively. If either usage counts reach zero, the object is no longer in use by any process, and it is destroyed.
+7. It sets the task’s exit code, stored in the `exit_code` member of the `task_struct`, to the code provided by `exit()` or whatever kernel mechanism forced the termination. The exit code is stored here for optional retrieval by the parent.
+8. It calls `exit_notify()` to send signals to the task’s parent, reparents any of the task’s children to another thread in their thread group or the init process, and sets the task’s exit state, stored in `exit_state` in the `task_struct` structure, to `EXIT_ZOMBIE`.
+9. `do_exit()` calls `schedule()` to switch to a new process (see Chapter 4). Because the process is now not schedulable, this is the last code the task will ever execute. `do_exit()` never returns.
+
+At this point, the task is not runnable, the only memory it occupies is its kernel stack, the `thread_info` structure, and the `task_struct` structure. The task exists solely to provide information to its parent. After the parent retrieves the information, or notifies the kernel that it is uninterested, the remaining memory held by the process is freed and returned to the system for use.
+
+---------------------
+
+After do_exit() completes, the process descriptor for the terminated process still exists, which enables the system to obtain information about a child process after it has terminated. Consequently, the acts of cleaning up after a process and removing its process descriptor are separate.     
+
+After the parent has obtained information on its terminated child, or signified to the kernel that it does not care, the child’s task_struct is deallocated.    
+
+When it is time to finally deallocate the process descriptor, `release_task()` is invoked. It does the following:     
+
+1. It calls `__exit_signal()`, which calls `__unhash_process()`, which in turns calls `detach_pid()` to remove the process from the pidhash and remove the process from the task list.     
+2. `__exit_signal()` releases any remaining resources used by the now dead process and finalizes statistics and bookkeeping.      
+3. If the task was the last member of a thread group, and the leader is a zombie, then `release_task()` notifies the zombie leader’s parent.
+4. `release_task()` calls `put_task_struct()` to free the pages containing the process’s kernel stack and `thread_info` structure and deallocate the slab cache containing the `task_struct`.     
+
+At this point, the process descriptor and all resources belonging solely to the process have been freed.    
+
+-----------------------
+
+If a parent exits before its children, the kernel needs to reparent them. It tries to reparent them to one living thread of the same thread group. If that fails, they are reparented to `init`.     
+
+`init` routinely calls `wait()` on its children, cleaning up any zombies assigned to it.     
+
+---------------------
+
+For the `ptraced` children, when their parent exits, the kernel does the same thing.     
