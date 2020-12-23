@@ -86,17 +86,20 @@ struct gendisk {
 _关于rcu (`__rcu`)相关的代码，可以参考kernel 文档[What is RCU? - "Read, Copy, Update"](https://www.kernel.org/doc/html/latest/RCU/whatisRCU.html)。_    
 
 ## 2. 使用
-通常，驱动注册一个完整可用的块设备，需要依次执行如下几步(__这里不包括与request_queue相关的操作__):   
+通常，驱动注册一个完整可用的块设备，需要依次执行如下几步:   
 + 调用register_blkdev()，注册一个块设备设备号，或者动态获取一个新的块设备设备号 
 + alloc gendisk (`alloc_disk()`或`alloc_disk_node()`)
-+ 设置gendisk内的各个fields，包括设备号、fops、private data、request queue、capacity等等等等
++ 设置gendisk内的各个fields，包括设备号、fops、private data、capacity等等等等
++ 分配并设置一个request queue
++ 将此request queue挂到刚才分配的gendisk上
 + add gendisk (`add_disk()`)
 
 而卸载一个块设备则是:    
 + del gendisk (`del_gendisk()`)
 + 调用`unregister_blkdev()`，注销块设备
 
-具体可见[Block Device Drivers](https://linux-kernel-labs.github.io/refs/heads/master/labs/block_device_drivers.html)。
+具体可见[Block Device Drivers](https://linux-kernel-labs.github.io/refs/heads/master/labs/block_device_drivers.html)。    
+在实际使用过程中，事实上的步骤顺序和每一步所调用的函数和上述所列可能有一定的出入，但大体上是相同的。   
 我们这里关注一下gendisk相关的函数。    
 
 ## 3. `alloc_disk()`和`alloc_disk_node()`
@@ -420,7 +423,7 @@ static void register_disk(struct device *parent, struct gendisk *disk,
 	if (!get_capacity(disk))
 		goto exit;
 
-	// 12. 获取disk->part0对应的struct block_device。
+	// 12. 创建disk->part0对应的struct block_device。
 	// 注意是block_device，不是device。
 	// 失败则直接goto exit。
 	bdev = bdget_disk(disk, 0);

@@ -564,7 +564,7 @@ static inline void remove_inode_hash(struct inode *inode)
 }
 ```
 ### 4.2 删除分区数据结构
-这一部分通过`delete_partition()`实现。但是注意，此函数没有对`part0`调用。   
+这一部分通过`delete_partition()`实现。但是注意，不能对`part0`调用此函数。   
 
 ``` c
 /*
