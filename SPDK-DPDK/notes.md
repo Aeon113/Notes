@@ -148,3 +148,17 @@ SGEs fetched by SPDK NVMe driver using callback functions
 + fio plugin
 + nvme perf
 
+# 2022-02-03
+
+SPDK 21.01 features:
+
+## 1. vfio-user
+SPDK加入了vfio-user支持。SPDK 进程与QEMU虚拟机的通信将不再仅能通过virtio-user协议进行。virtio-user是一种半虚拟化协议，SPDK application通过这种协议，可以在QEMU 虚拟机中虚拟出一个快设备；而通过vfio-user，则可以直接虚拟出一个NVMe设备。
+
+## 2. Dynamic Scheduler
+过去每个reactor (DPDK lcore)必须在进程初始化时绑定SPDK threads (SPDK thread和OS中的thread不是一个概念，指的是一组独立的SPDK框架资源，部分文章介绍，SPDK thread是io_channels, active_pollers, timer_pollers, messages, msg_cache的组合，他们是SPDK thread私有的，一个SPDK thread不能直接访问另一个SPDK thread的资源；比如一个SPDK thread只能访问自己的io_channels, 不能访问另一个SPDK thread的io_channels)，且运行期间不再允许更改。现在，threads可以按需被动态的在各个reactor间移动。意味着可以动态的监控各个reactor/thread的负载，然后给负担更重的reactor动态的减少threads，给负担较小的reactor增加threads；或者将threads移动到部分reactors上然后关掉另一部分reactors(将这个reactor由poll mode转换成interrupt mode)以节省能耗。
+
+## 3. Zoned Namespace (ZNS) Support
+
+
+
