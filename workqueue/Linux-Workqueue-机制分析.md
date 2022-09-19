@@ -51,7 +51,7 @@ Linux 会为每个 online CPU 都创建 1 个 normal pool 和 1 个 high priorit
 
 #### work
 
-```
+```  
 struct work_struct {
     atomic_long_t data;
     struct list_head entry;
