@@ -1,11 +1,12 @@
 # 块设备与gendisk
 
-`struct gendisk`在Linux kernel中用于表示一个独立的磁盘设备。基本上Linux中的每一个块设备都对应一个`struct gendisk`。这里以5.8.9的代码为例研究这个struct，以及它在整个块设备子系统中的作用。   
+`struct gendisk`在Linux kernel中用于表示一个独立的磁盘设备。基本上 Linux中的每一个块设备都对应一个 `struct gendisk`。这里以5.8.9的代码为例研究这个struct，以及它在整个块设备子系统中的作用。
 
 ## 1. 定义
-`struct gendisk`的定义在`include/linux/genhd.h`中:   
 
-``` c
+`struct gendisk`的定义在 `include/linux/genhd.h`中:
+
+```c
 struct gendisk {
 	/* major, first_minor and minors are input parameters only,
 	 * don't use directly.  Use disk_devt() and disk_max_parts().
@@ -51,67 +52,73 @@ struct gendisk {
 };
 ```
 
-逐一介绍一下这个结构体的各个field:    
+逐一介绍一下这个结构体的各个field:
 
-|  Field | Comment |
-|-------:|:--------|
-| major | 块设备的major设备号，可以通过`register_blkdev()`得到。 |
-| first_minor | 通常，每有一个分区，都会占用一个此`gendisk`的minor。此项表示第一个可用的minor编号，通常是0。 |
-| minors | 通常，每有一个分区，都会占用一个此`gendisk`的minor。此项表示此`gendisk`中可用的minors的数量，即分区数量。 |
-| disk_name | 块设备名称，将被用于注册`/dev`和`/sys`下的各项。 |
-| events | 事件相关，参考此表中的`ev`项。 |
-| async_events | 事件相关，参考此表中的`ev`项。  |
-| part_tbl | 分区表。注意此项必须使用相关的helpers函数来访问。此表中的每个分区都使用`struct hd_struct`来表示。此外，此表的第0项，即`part_tbl->part[0]`，指代的并非一个分区，而是整个当前的块设备，它的值即为此表中下一项的part0的地址。这个赋值的过程在`__alloc_disk_node()`中。 |
-| part0 | 指代当前块设备的`struct hd_struct`。如此`part_tbl`条目所述，它的地址也被赋给了`part_tbl->part[0]`。 |
-| fops | 块设备的file_operations。其中的回调由驱动提供。它比字符设备的`struct file_operations`简单许多，两者最大的不同是块设备的没有read/write相关的回调，因为块设备的IO相对较复杂，它主要需要一系列的机制协作来实现。 |
-| queue | 请求队列。所有对此块设备的IO(`struct bio`和`struct request`)最终都会汇集到这个队列中，它们在被相应的函数处理后，发送给驱动注册在此queue中的回调。 |
-| private_data | 驱动private data。 |
-| flags | GenHD capability flags，用于设置此gendisk支持的特性。此项是bitset，值可以参考[Generic Block Device Capability](https://www.kernel.org/doc/html/v5.8/block/capability.html) |
-| lookup_sem | 用于防止gendisk的remove/recreation/open等过程出现竞态。可见kernel commit [56c0908c855afbb2bdda17c15d2879949a091ad3](https://patchwork.kernel.org/patch/10242121/) |
-| slave_dir | 没有找到相关文档。从代码中看，与device mapper有关。关于device mapper可以参考[Wikipedia](https://en.wikipedia.org/wiki/Device_mapper)，许多重要的块设备机制，例如LVM，都基于此功能实现。由于device mapper的存在，一个higher level的块设备可能由一个或多个lower level的块设备组成，这些lower level的块设备即为它的slaves。这里的slave_dir将存有指向这些slaves的kobjects的连接。 |
-| random | 用于为kernel的random pool贡献entropy，kernel使用此部分生成随机数。与块设备本身的功能无较大关联。 |
-| sync_io | 没有找到相关文档，查看代码，推测和md (multiple devices, 多用于RAID)有关。 |
-| ev | 和`events`以及`async_events`一同，负责将事件推送到userland，具体事件包括attach、eject。具体可见kernel commit [77ea887e433ad8389d416826936c110fa7910f80](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=77ea887e433ad8389d416826936c110fa7910f80)，以及文章[Reworking disk events handling](https://lwn.net/Articles/423619/)。 |
-| node_id | 当前`struct gendisk`以及分区表等信息所在的NUMA node，由驱动可以在alloc disk时指定(`alloc_disk_node()`和`alloc_disk()`)。 |
-| bb | 没有找到相关文档。查询资料，判断与NVDIMM设备有关。此项负责提供为NVDIMM设备提供坏块表支持，可见[block: Add badblock management for gendisks](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=99e6608c9e7414ae4f2168df8bf8fae3eb49e41f)。除NVDIMM设备外，绝大多数块设备的坏块管理都不是kernel或驱动的职责，因此不会使用此项。 |
-| lockdep_map | 与死锁监测有关。可见 [commit e319e1fbd9d42420ab6eec0bfd75eb9ad7ca63b1](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e319e1fbd9d42420ab6eec0bfd75eb9ad7ca63b1)。 |
+|        Field | Comment                                                                                                                                                                                                                                                                                                                                                                    |
+| -----------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|        major | 块设备的major设备号，可以通过 `register_blkdev()`得到。                                                                                                                                                                                                                                                                                                                  |
+|  first_minor | 通常，每有一个分区，都会占用一个此 `gendisk`的minor。此项表示第一个可用的minor编号，通常是0。                                                                                                                                                                                                                                                                            |
+|       minors | 通常，每有一个分区，都会占用一个此 `gendisk`的minor。此项表示此 `gendisk`中可用的minors的数量，即分区数量。                                                                                                                                                                                                                                                            |
+|    disk_name | 块设备名称，将被用于注册 `/dev`和 `/sys`下的各项。                                                                                                                                                                                                                                                                                                                     |
+|       events | 事件相关，参考此表中的 `ev`项。                                                                                                                                                                                                                                                                                                                                          |
+| async_events | 事件相关，参考此表中的 `ev`项。                                                                                                                                                                                                                                                                                                                                          |
+|     part_tbl | 分区表。注意此项必须使用相关的helpers函数来访问。此表中的每个分区都使用 `struct hd_struct`来表示。此外，此表的第0项，即 `part_tbl->part[0]`，指代的并非一个分区，而是整个当前的块设备，它的值即为此表中下一项的part0的地址。这个赋值的过程在 `__alloc_disk_node()`中。                                                                                               |
+|        part0 | 指代当前块设备的 `struct hd_struct`。如此 `part_tbl`条目所述，它的地址也被赋给了 `part_tbl->part[0]`。                                                                                                                                                                                                                                                               |
+|         fops | 块设备的file_operations。其中的回调由驱动提供。它比字符设备的 `struct file_operations`简单许多，两者最大的不同是块设备的没有read/write相关的回调，因为块设备的IO相对较复杂，它主要需要一系列的机制协作来实现。                                                                                                                                                           |
+|        queue | 请求队列。所有对此块设备的IO(`struct bio`和 `struct request`)最终都会汇集到这个队列中，它们在被相应的函数处理后，发送给驱动注册在此queue中的回调。                                                                                                                                                                                                                     |
+| private_data | 驱动private data。                                                                                                                                                                                                                                                                                                                                                         |
+|        flags | GenHD capability flags，用于设置此gendisk支持的特性。此项是bitset，值可以参考[Generic Block Device Capability](https://www.kernel.org/doc/html/v5.8/block/capability.html)                                                                                                                                                                                                    |
+|   lookup_sem | 用于防止gendisk的remove/recreation/open等过程出现竞态。可见kernel commit[56c0908c855afbb2bdda17c15d2879949a091ad3](https://patchwork.kernel.org/patch/10242121/)                                                                                                                                                                                                              |
+|    slave_dir | 没有找到相关文档。从代码中看，与device mapper有关。关于device mapper可以参考[Wikipedia](https://en.wikipedia.org/wiki/Device_mapper)，许多重要的块设备机制，例如LVM，都基于此功能实现。由于device mapper的存在，一个higher level的块设备可能由一个或多个lower level的块设备组成，这些lower level的块设备即为它的slaves。这里的slave_dir将存有指向这些slaves的kobjects的连接。 |
+|       random | 用于为kernel的random pool贡献entropy，kernel使用此部分生成随机数。与块设备本身的功能无较大关联。                                                                                                                                                                                                                                                                           |
+|      sync_io | 没有找到相关文档，查看代码，推测和md (multiple devices, 多用于RAID)有关。                                                                                                                                                                                                                                                                                                  |
+|           ev | 和 `events`以及 `async_events`一同，负责将事件推送到userland，具体事件包括attach、eject。具体可见kernel commit [77ea887e433ad8389d416826936c110fa7910f80](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=77ea887e433ad8389d416826936c110fa7910f80)，以及文章[Reworking disk events handling](https://lwn.net/Articles/423619/)。              |
+|      node_id | 当前 `struct gendisk`以及分区表等信息所在的NUMA node，由驱动可以在alloc disk时指定(`alloc_disk_node()`和 `alloc_disk()`)。                                                                                                                                                                                                                                           |
+|           bb | 没有找到相关文档。查询资料，判断与NVDIMM设备有关。此项负责提供为NVDIMM设备提供坏块表支持，可见[block: Add badblock management for gendisks](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=99e6608c9e7414ae4f2168df8bf8fae3eb49e41f)。除NVDIMM设备外，绝大多数块设备的坏块管理都不是kernel或驱动的职责，因此不会使用此项。                     |
+|  lockdep_map | 与死锁监测有关。可见[commit e319e1fbd9d42420ab6eec0bfd75eb9ad7ca63b1](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e319e1fbd9d42420ab6eec0bfd75eb9ad7ca63b1)。                                                                                                                                                                               |
 
-另外两个条件编译项相关的fields:   
+另外两个条件编译项相关的fields:
 
-| Field | Preprocessor Condition | Comment |
-|-------:|--------|:--------|
+|          Field | Preprocessor Condition   | Comment                                                                                                                                                                                                  |
+| -------------: | ------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | integrity_kobj | CONFIG_BLK_DEV_INTEGRITY | 与块设备数据完整性检查有关。可见[Data Integrity](https://www.kernel.org/doc/html/v5.8/block/data-integrity.html)和[Block layer: integrity checking and lots of partitions](https://lwn.net/Articles/290141/)。 |
-| cdi | IS_ENABLED(CONFIG_CDROM) | 与cdrom相关。 |
+|            cdi | IS_ENABLED(CONFIG_CDROM) | 与cdrom相关。                                                                                                                                                                                            |
 
-_关于rcu (`__rcu`)相关的代码，可以参考kernel 文档[What is RCU? - "Read, Copy, Update"](https://www.kernel.org/doc/html/latest/RCU/whatisRCU.html)。_    
+_关于rcu (`__rcu`)相关的代码，可以参考kernel 文档[What is RCU? - &#34;Read, Copy, Update&#34;](https://www.kernel.org/doc/html/latest/RCU/whatisRCU.html)。_
 
 ## 2. 使用
-通常，驱动注册一个完整可用的块设备，需要依次执行如下几步:   
-+ 调用register_blkdev()，注册一个块设备设备号，或者动态获取一个新的块设备设备号 
-+ alloc gendisk (`alloc_disk()`或`alloc_disk_node()`)
+
+通常，驱动注册一个完整可用的块设备，需要依次执行如下几步:
+
++ 调用register_blkdev()，注册一个块设备设备号，或者动态获取一个新的块设备设备号
++ alloc gendisk (`alloc_disk()`或 `alloc_disk_node()`)
 + 设置gendisk内的各个fields，包括设备号、fops、private data、capacity等等等等
 + 分配并设置一个request queue
 + 将此request queue挂到刚才分配的gendisk上
 + add gendisk (`add_disk()`)
 
-而卸载一个块设备则是:    
+而卸载一个块设备则是:
+
 + del gendisk (`del_gendisk()`)
-+ 调用`unregister_blkdev()`，注销块设备
++ 调用 `unregister_blkdev()`，注销块设备
 
-具体可见[Block Device Drivers](https://linux-kernel-labs.github.io/refs/heads/master/labs/block_device_drivers.html)。    
-在实际使用过程中，事实上的步骤顺序和每一步所调用的函数和上述所列可能有一定的出入，但大体上是相同的。   
-我们这里关注一下gendisk相关的函数。    
+具体可见[Block Device Drivers](https://linux-kernel-labs.github.io/refs/heads/master/labs/block_device_drivers.html)。
+在实际使用过程中，事实上的步骤顺序和每一步所调用的函数和上述所列可能有一定的出入，但大体上是相同的。
+我们这里关注一下gendisk相关的函数。
 
-## 3. `alloc_disk()`和`alloc_disk_node()`
-`alloc_disk()`是`alloc_disk_node()`的一个简写形式:   
-``` c
+## 3. `alloc_disk()`和 `alloc_disk_node()`
+
+`alloc_disk()`是 `alloc_disk_node()`的一个简写形式:
+
+```c
 #define alloc_disk(minors) alloc_disk_node(minors, NUMA_NO_NODE)
 ```
-可以看到，`alloc_disk()`就是不指定NUMA node的`alloc_disk_node()`。   
 
-而`alloc_disk_node()`的实现如下:   
+可以看到，`alloc_disk()`就是不指定NUMA node的 `alloc_disk_node()`。
 
-``` c
+而 `alloc_disk_node()`的实现如下:
+
+```c
 #define alloc_disk_node(minors, node_id)				\
 ({									\
 	static struct lock_class_key __key;				\
@@ -128,13 +135,15 @@ _关于rcu (`__rcu`)相关的代码，可以参考kernel 文档[What is RCU? - "
 	__disk;								\
 })
 ```
-这个函数主要做2件事情:   
-+ 调用`__alloc_disk_node()`，获取`struct gendisk`
-+ 利用`__name`和`__key`初始化`struct gendisk`的`lockdep_map`
 
-由此可知，主要的逻辑在`__alloc_disk_node()`中:    
+这个函数主要做2件事情:
 
-``` c
++ 调用 `__alloc_disk_node()`，获取 `struct gendisk`
++ 利用 `__name`和 `__key`初始化 `struct gendisk`的 `lockdep_map`
+
+由此可知，主要的逻辑在 `__alloc_disk_node()`中:
+
+```c
 struct gendisk *__alloc_disk_node(int minors, int node_id)
 {
 	struct gendisk *disk;
@@ -209,28 +218,29 @@ EXPORT_SYMBOL(__alloc_disk_node);
 ```
 
 ## 4. `add_disk()`
-在`alloc_disk()`，以及相应的设置完成后，驱动将调用`add_disk()`以注册此disk。   
 
-``` c
+在 `alloc_disk()`，以及相应的设置完成后，驱动将调用 `add_disk()`以注册此disk。
+
+```c
 static inline void add_disk(struct gendisk *disk)
 {
 	device_add_disk(NULL, disk, NULL);
 }
 ```
 
-可以看到主要实现在函数`device_add_disk()`里。   
+可以看到主要实现在函数 `device_add_disk()`里。
 
-`device_add_disk()`有3个参数:   
+`device_add_disk()`有3个参数:
 
-| Parameter | Comment |
-|----------:|:--------|
-| parent | 设置此`struct gendisk`对应的`struct device`的`parent` |
-| disk | 目标`struct gendisk` |
-| groups | 设置此`struct gendisk`对应的`struct device`的`group` |
+| Parameter | Comment                                                        |
+| --------: | :------------------------------------------------------------- |
+|    parent | 设置此 `struct gendisk`对应的 `struct device`的 `parent` |
+|      disk | 目标 `struct gendisk`                                        |
+|    groups | 设置此 `struct gendisk`对应的 `struct device`的 `group`  |
 
-而`device_add_disk()`又会调用`__device_add_disk()`。    
+而 `device_add_disk()`又会调用 `__device_add_disk()`。
 
-``` c
+```c
 void device_add_disk(struct device *parent, struct gendisk *disk,
 		     const struct attribute_group **groups)
 
@@ -239,7 +249,7 @@ void device_add_disk(struct device *parent, struct gendisk *disk,
 }
 ```
 
-``` c
+```c
 /**
  * __device_add_disk - add disk information to kernel list
  * @parent: parent device for the disk
@@ -321,7 +331,7 @@ static void __device_add_disk(struct device *parent, struct gendisk *disk,
 
 	// 8. 注册设备和相关kobjects。
 	register_disk(parent, disk, groups);
-	
+
 	// 9. 注册request queue和相关kobjects。
 	if (register_queue)
 		blk_register_queue(disk);
@@ -341,8 +351,9 @@ static void __device_add_disk(struct device *parent, struct gendisk *disk,
 }
 ```
 
-我们再来看看第8步的`register_disk()`:    
-``` c
+我们再来看看第8步的 `register_disk()`:
+
+```c
 static void register_disk(struct device *parent, struct gendisk *disk,
 			  const struct attribute_group **groups)
 {
@@ -467,8 +478,10 @@ exit:
 ```
 
 ## 5. `del_gendisk()`
-再来看删除`struct gendisk`的流程:   
-``` c
+
+再来看删除 `struct gendisk`的流程:
+
+```c
 void del_gendisk(struct gendisk *disk)
 {
 	struct disk_part_iter piter;
