@@ -228,27 +228,21 @@ per node partial链表类似per cpu partial，区别是node中的slab是所有cp
 
 如果释放的obj就是属于正在使用cpu上的slab，那么直接释放即可，非常简单；如果不是的话，首先判断所属slub是不是full状态，因为full slab是没妈的孩子，释放之后就变成partial empty，急需要找个链表领养啊！这个妈就是per cpu partial链表。如果per cpu partial链表管理的所有slab的free object数量超过`kmem_cache`的`cpu_partial`成员的话，就需要将per cpu partial链表管理的所有slab移动到per node partial链表管理；如果不是full slab的话，继续判断释放当前obj后的slab是否是empty slab，如果是empty slab，那么在满足`kmem_cache_node`的`nr_partial`大于`kmem_cache`的`min_partial`的情况下，则会释放该slab的内存。其他情况就直接释放即可。
 
-1) 假设下图左边的情况下释放obj，如果满足`kmem_cache_node`的`nr_partial`大于`kmem_cache`的`min_partial`的话，释放情况如下图所示。
-
-![1663760454673](image/图解slub/1663760454673.png)
-
-2) 假设下图左边的情况下释放obj，如果不满足`kmem_cache_node`的`nr_partial`大于`kmem_cache`的`min_partial`的话，释放情况如下图所示。
+1) 假设下图左边的情况下释放obj，如果满足 `kmem_cache_node`的 `nr_partial`大于 `kmem_cache`的 `min_partial`的话，释放情况如下图所示。
+2) 假设下图左边的情况下释放obj，如果不满足 `kmem_cache_node`的 `nr_partial`大于 `kmem_cache`的 `min_partial`的话，释放情况如下图所示。
 
 ![1663760460092](image/图解slub/1663760460092.png)
 
-3) 假设下图从full slab释放obj的话，如果满足per cpu partial管理的所有slab的free object数量大于`kmem_cache`的`cpu_partial`成员的话的话，将per cpu partial链表管理的所有slab移动到per node partial链表管理，释放情况如下图所示。
-
-![1663760522087](image/图解slub/1663760522087.png)
-
-4) 假设下图从full slab释放obj的话，如果不满足per cpu partial管理的所有slab的free object数量大于`kmem_cache`的`cpu_partial`成员的话的话，释放情况如下图所示。
+3) 假设下图从full slab释放obj的话，如果满足per cpu partial管理的所有slab的free object数量大于 `kmem_cache`的 `cpu_partial`成员的话的话，将per cpu partial链表管理的所有slab移动到per node partial链表管理，释放情况如下图所示。
+4) 假设下图从full slab释放obj的话，如果不满足per cpu partial管理的所有slab的free object数量大于 `kmem_cache`的 `cpu_partial`成员的话的话，释放情况如下图所示。
 
 ![1663760530553](image/图解slub/1663760530553.png)
 
 ## 6. `kmalloc()`
 
-好了，说了这么多，估计你会感觉slab好像跟我们没什么关系。如果作为一个驱动开发者，是不是感觉自己写的driver从来没有使用过这些接口呢？其实我们经常使用，只不过隐藏在`kmalloc()`的面具之下。
+好了，说了这么多，估计你会感觉slab好像跟我们没什么关系。如果作为一个驱动开发者，是不是感觉自己写的driver从来没有使用过这些接口呢？其实我们经常使用，只不过隐藏在 `kmalloc()`的面具之下。
 
-`kmalloc()`的内存分配就是基于slab分配器，在系统启动初期调用 `create_kmalloc_caches()`创建多个管理不同大小对象的 `kmem_cache`，例如：8B、16B、32B、64B、…、64MB等大小。当然默认配置情况下，系统系统启动之后创建的最大size的 `kmem_cache`是 `kmalloc-8192`。因此，通过slab接口分配的最大内存是8192 bytes。那么通过kmalloc接口申请的内存大于8192 bytes该怎么办呢？其实kmalloc会判断申请的内存是否大于8192 bytes，如果大于的话就会通过`alloc_pages()`接口申请内存。`kmem_cache`的名称以及大小使用struct kmalloc_info_struct管理。所有管理不同大小对象的kmem_cache的名称如下：
+`kmalloc()`的内存分配就是基于slab分配器，在系统启动初期调用 `create_kmalloc_caches()`创建多个管理不同大小对象的 `kmem_cache`，例如：8B、16B、32B、64B、…、64MB等大小。当然默认配置情况下，系统系统启动之后创建的最大size的 `kmem_cache`是 `kmalloc-8192`。因此，通过slab接口分配的最大内存是8192 bytes。那么通过 `kmalloc()`接口申请的内存大于8192 bytes该怎么办呢？其实 `kmalloc()`会判断申请的内存是否大于8192 bytes，如果大于的话就会通过 `alloc_pages()`接口申请内存。`kmem_cache`的名称以及大小使用 `struct kmalloc_info_struct`管理。所有管理不同大小对象的kmem_cache的名·称如下：
 
 ```c
 const struct kmalloc_info_struct kmalloc_info[] __initconst = { 
@@ -294,7 +288,7 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 2) 通过`kmalloc_index`函数查找符合满足分配大小的最小`kmem_cache`。
 3) 将`index`作为下表从`kmalloc_caches`数组中找到符合的`kmem_cache`，并从slab缓存池中分配对象。
 
-我们再看一下`kmalloc_index的实现()`。
+我们再看一下`kmalloc_index()`的实现。
 
 ```c
 static __always_inline int kmalloc_index(size_t size)
