@@ -18,33 +18,25 @@
 
 在上一篇文章中，我描述了协程 TS 引入的两个新接口之一：**Awaitable** 接口。协程 TS 引入的第二个接口对于这种代码转换非常重要，那就是 **Promise** 接口。
 
-**Promise** 接口指定了自定义协程行为的方法。库编写者可以自定义协程被调用时的行为，协程返回时的行为（无论是通过正常方式还是通过未处理的异常），以及协程内部的任何 `co_await` 或 `co_yield` 表达式的行为。
+**Promise** 接口指定了自定义协程行为的方法。库编写者可以自定义协程被调用时的行为，协程返回时的行为（无论是通过正常方式还是通过未处理的异常），
+以及协程内部的任何 `co_await` 或 `co_yield` 表达式的行为。
 
-## Promise objects
+## Promise 对象
 
-The **Promise** object defines and controls the behaviour of the coroutine itself
-by implementing methods that are called at specific points during execution of the
-coroutine.
+在协程执行过程中的特定位置会调用一些**Promise**对象所提供的特殊函数，通过**Promise** 对象实现这些函数，我们可以定义和控制协程的行为。
 
-> Before we go on, I want you to try and rid yourself of any preconceived notions of
-> what a "promise" is. While, in some use-cases, the coroutine promise object does indeed
-> act in a similar role to the `std::promise` part of a `std::future` pair, for other
-> use-cases the analogy is somewhat stretched. It may be easier to think about the
-> coroutine's promise object as being a "coroutine state controller" object that controls
-> the behaviour of the coroutine and can be used to track its state.
+> 在我们继续之前，我希望你能摆脱对“promise”这个词的任何先入为主的观念。
+> 虽然在某些情况下，协程的 promise 对象确实扮演了类似于 `std::promise`-`std::future`-pair 中的`std::promise` 角色，
+> 但在其他情况下，这个类比有些牵强。更容易理解的方式是将协程的 promise 对象视为一个“协程状态控制器”对象 (它并不同于之前提到的coroutine_handle, 
+> 因为每个协程帧只有一个 promise 对象)，它控制着协程的行为并可以用于跟踪其状态。
 
-An instance of the promise object is constructed within the coroutine frame for
-each invocation of a coroutine function.
+每次调用协程函数时，都会在协程帧内构造一个 promise 对象的实例。
 
-The compiler generates calls to certain methods on the promise object at key points
-during execution of the coroutine.
+编译器在协程执行过程中的关键点上生成对 promise 对象的某些方法的调用。
 
-In the following examples, assume that the promise object created in the coroutine
-frame for a particular invocation of the coroutine is `promise`.
+在下面的示例中，假设在特定协程调用的协程帧中创建的 promise 对象为 `promise`。
 
-When you write a coroutine function that has a body, `<body-statements>`, which
-contains one of the coroutine keywords (`co_return`, `co_await`, `co_yield`) then
-the body of the coroutine is transformed to something (roughly) like the following:
+当你编写一个具有 `<body-statements>` 体的协程函数，该体包含协程关键字之一（`co_return`、`co_await`、`co_yield`），那么协程的体将被转换为类似以下内容的形式：
 
 ```c++
 {
@@ -62,82 +54,57 @@ FinalSuspend:
 }
 ```
 
-When a coroutine function is called there are a number of steps that are
-performed prior to executing the code in the source of the coroutine body that
-are a little different to regular functions.
+当调用协程函数时，会在执行协程体源代码之前执行一些与常规函数略有不同的步骤。
 
-Here is a summary of the steps (I'll go into more detail on each of the steps below).
+以下是这些步骤的摘要（我将在下面详细介绍每个步骤）。
 
-1. Allocate a coroutine frame using `operator new` (optional).
-2. Copy any function parameters to the coroutine frame.
-3. Call the constructor for the promise object of type, `P`.
-4. Call the `promise.get_return_object()` method to obtain the result to return to the caller
-   when the coroutine first suspends. Save the result as a local variable.
-5. Call the `promise.initial_suspend()` method and `co_await` the result.
-6. When the `co_await promise.initial_suspend()` expression resumes (either immediately
-   or asynchronously), then the coroutine starts executing the coroutine body statements that you wrote.
+1. 使用 `operator new` 分配协程帧的内存（可选）。
+2. 将任何函数参数复制到协程帧中。
+3. 调用类型为 `P` 的 promise 对象的构造函数。
+4. 调用 `promise.get_return_object()` 方法以获取在协程首次暂停时返回给调用者的结果。将结果保存为局部变量。
+5. 调用 `promise.initial_suspend()` 方法并 `co_await` 结果。
+6. 当 `co_await promise.initial_suspend()` 表达式恢复执行（立即执行或先挂起再执行），协程开始执行您编写的协程体语句。
 
-Some additional steps are executed when execution reaches a `co_return` statement:
-1. Call `promise.return_void()` or `promise.return_value(<expr>)`
-2. Destroy all variables with automatic storage duration in reverse order they were created.
-3. Call `promise.final_suspend()` and `co_await` the result.
+当执行到 `co_return` 语句时，还会执行一些额外的步骤：
+1. 调用 `promise.return_void()` 或 `promise.return_value(<expr>)`。
+2. 按照创建的相反顺序销毁所有具有自动存储期的变量。
+3. 调用 `promise.final_suspend()` 并 `co_await` 其结果。
 
-If instead, execution leaves `<body-statements>` due to an unhandled exception then:
-1. Catch the exception and call `promise.unhandled_exception()` from within the catch-block.
-2. Call `promise.final_suspend()` and `co_await` the result.
+如果执行权由于由于未处理的异常而离开 `<body-statements>` ，则：
+1. 捕获异常并在 catch 块中调用 `promise.unhandled_exception()`。
+2. 调用 `promise.final_suspend()` 并 `co_await` 结果。
 
-Once execution propagates outside of the coroutine body then the coroutine
-frame is destroyed. Destroying the coroutine frame involves a number of steps:
-1. Call the destructor of the promise object.
-2. Call the destructors of the function parameter copies.
-3. Call `operator delete` to free the memory used by the coroutine frame (optional)
-4. Transfer execution back to the caller/resumer.
+一旦执行超出协程体，则协程帧将被销毁。销毁协程帧涉及以下几个步骤：
+1. 调用 promise 对象的析构函数。
+2. 调用函数参数副本的析构函数。
+3. 调用 `operator delete` 释放协程帧使用的内存（可选）。
+4. 将执行权转移回调用者/恢复者。
 
-When execution first reaches a `<return-to-caller-or-resumer>` point inside a `co_await`
-expression, or if the coroutine runs to completion without hitting a `<return-to-caller-or-resumer>`
-point, then the coroutine is either suspended or destroyed and the return-object previously
-returned from the call to `promise.get_return_object()` is then returned to the caller of the
-coroutine.
+当执行首次到达 `co_await` 表达式中的 `<return-to-caller-or-resumer>` 点，或者如果协程在不触发 `<return-to-caller-or-resumer>` 点的情况下运行完成，
+则协程将被暂停或销毁，并将之前从调用 `promise.get_return_object()` 返回的返回对象返回给协程的调用者。
 
-### Allocating a coroutine frame
+### 分配协程帧
 
-First, the compiler generates a call to `operator new` to allocate memory
-for the coroutine frame.
+首先，编译器生成一个调用 `operator new` 来为协程帧分配内存。
 
-If the promise type, `P`, defines a custom `operator new` method then that
-is called, otherwise the global `operator new` is called.
+如果 promise 类型 `P` 定义了自定义的 `operator new` 方法，则调用该方法，否则调用全局的 `operator new`。
 
-There are a few important things to note here:
+这里有几个重要的事项需要注意：
 
-The size passed to `operator new` is not `sizeof(P)` but is rather the size of the
-entire coroutine frame and is determined automatically by the compiler based on the
-number and sizes of parameters, size of the promise object, number and sizes of local
-variables and other compiler-specific storage needed for management of coroutine state.
+传递给 `operator new` 的大小不是 `sizeof(P)`，而是整个协程帧的大小，由编译器根据参数的数量和大小、promise 对象的大小、局部变量的数量和大小以及其他编译器特定的用于管理协程状态的存储需求自动确定。
 
-The compiler is free to elide the call to `operator new` as an optimisation if:
-* it is able to determine that the lifetime of the coroutine frame is strictly nested within
-  the lifetime of the caller; and
-* the compiler can see the size of coroutine frame required at the call-site.
+如果编译器能够确定协程帧的生命周期严格嵌套在调用者的生命周期内，并且编译器可以在调用点看到所需的协程帧大小，则编译器可以优化掉对 `operator new` 的调用。
 
-In these cases, the compiler can allocate storage for the coroutine frame in the caller's
-activation frame (either in the stack-frame or coroutine-frame part).
+在这些情况下，编译器可以在调用者的活动帧中为协程帧分配存储空间（可以是栈帧或协程帧部分）。
 
-The Coroutines TS does not yet specify any situations in which the allocation elision
-is guaranteed, so you still need to write code as if the allocation of the coroutine
-frame may fail with `std::bad_alloc`. This also means that you usually shouldn't declare
-a coroutine function as `noexcept` unless you are ok with `std::terminate()` being
-called if the coroutine fails to allocate memory for the coroutine frame.
+协程 TS 尚未指定任何能够确保分配被消除的情况，因此您编写代码时，仍然需要假设协程帧的分配可能失败并引发 `std::bad_alloc` 异常。这也意味着，除非您能够接受协程帧分配内存失败时调用 `std::terminate()` ，否则通常不应将协程函数声明为 `noexcept`。
 
-There is a fallback, however, that can be used in lieu of exceptions for handling
-failure to allocate the coroutine frame. This can be necessary when operating in
-environments where exceptions are not allowed, such as embedded environments
-or high-performance environments where the overhead of exceptions is not tolerated.
+然而，有一种备选方案可以替代异常来处理无法分配协程帧的情况。这在无法使用异常的环境中可能是必要的，例如嵌入式环境或高性能环境，其通常无法容忍异常的开销。
 
-If the promise type provides a static `P::get_return_object_on_allocation_failure()`
-member function then the compiler will generate a call to the
-`operator new(size_t, nothrow_t)` overload instead. If that call returns `nullptr`
-then the coroutine will immediately call `P::get_return_object_on_allocation_failure()`
-and return the result to the caller of the coroutine instead of throwing an exception.
+如果 promise 类型提供了静态的 `P::get_return_object_on_allocation_failure()` 成员函数，
+那么编译器将生成对 `operator new(size_t, nothrow_t)` 重载的调用。
+如果该调用返回 `nullptr`，则协程将立即调用 `P::get_return_object_on_allocation_failure()`，
+并将结果返回给协程的调用者，而不是抛出异常。
 
 #### Customising coroutine frame memory allocation
 
