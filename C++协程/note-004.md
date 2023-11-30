@@ -107,32 +107,15 @@ public:
 
 接下来，我们希望协程在左大括号处挂起，以便在等待返回的`task`时可以从此处恢复协程的执行。
 
-There are several benefits of starting the coroutine lazily:
-1. It means that we can attach the continuation's `std::coroutine_handle` before
-  starting execution of the coroutine. This means we don't need to use
-  thread-synchronisation to arbitrate the race between attaching the
-  continuation later and the coroutine running to completion.
-2. It means that the `task` destructor can unconditionally destroy the
-  coroutine frame - we don't need to worry about whether the coroutine
-  is potentially executing on another thread since the coroutine will
-  not start executing until we await it, and while it is executing the
-  calling coroutine is suspended and so won't attempt to call the task
-  destructor until the coroutine finishes executing.
-  This gives the compiler a much better chance at inlining the allocation
-  of the coroutine frame into the frame of the caller.
-  See [P0981R0](https://wg21.link/P0981R0) to read more about the Heap Allocation eLision Optimisation (HALO).
-3. It also improves the exception-safety of your coroutine code. If you don't
-  immediately `co_await` the returned `task` and do something else that
-  can throw an exception that causes the stack to unwind and the `task` destructor
-  to run then we can safely destroy the coroutine since we know it hasn't
-  started yet. We aren't left with the difficult choice between detaching,
-  potentially leaving dangling references, blocking in the destructor, terminating
-  or undefined-behaviour.
-  This is something that I cover in a bit more detail in my
-  [CppCon 2019 talk on Structured Concurrency](https://www.youtube.com/watch?v=1Wy5sq3s2rg).
+延迟启动协程有几个好处：
+1. 这意味着我们可以在启动协程之前附加继续的`std::coroutine_handle`。这意味着我们不需要使用线程同步来解决附加继续和协程完成执行之间的竞争问题。
+2. 这意味着`task`析构函数可以无条件地销毁协程帧 - 我们不需要担心协程是否在另一个线程上执行，因为协程在我们等待它之前不会开始执行，并且在执行时，调用协程被挂起，因此不会尝试调用任务析构函数，直到协程完成执行。
+  这使得编译器有更好的机会将协程帧的分配内联到调用者的帧中。
+  有关堆分配省略优化（HALO）的更多信息，请参见[P0981R0](https://wg21.link/P0981R0)。
+3. 它还提高了协程代码的异常安全性。如果您不立即`co_await`返回的`task`，而是做一些可能引发异常的其他操作，导致堆栈展开和`task`析构函数运行，那么我们可以安全地销毁协程，因为我们知道它还没有开始执行。我们不必在可能留下悬空引用、可能在析构函数中阻塞、终止程序或产生未定义行为之间做出困难的选择。
+  这是我在我的[CppCon 2019关于结构化并发的演讲](https://www.youtube.com/watch?v=1Wy5sq3s2rg)中更详细地介绍的内容。
 
-To have the coroutine initially suspend at the open curly brace we define an
-`initial_suspend()` method that returns the builtin `suspend_always` type.
+为了让协程在左大括号处初始挂起，我们只需要定义一个返回内置的`suspend_always`类型的`initial_suspend()`方法。
 
 ```c++
   std::suspend_always initial_suspend() noexcept {
@@ -140,20 +123,13 @@ To have the coroutine initially suspend at the open curly brace we define an
   }
 ```
 
-Next, we need to define the `return_void()` method, called when you
-execute `co_return;` or when execution runs off the end of the coroutine.
-This method doesn't actually need to do anything, it just needs to exist
-so that the compiler knows that `co_return;` is valid within this coroutine
-type.
+接下来，我们需要定义 `return_void()` 方法，其将在执行 `co_return;` 或者协程执行到末尾时被自动调用。这个方法实际上不需要做任何事情，只是必须存在，以便编译器知道在这个协程类型中 `co_return;` 是有效的。
 
 ```c++
   void return_void() noexcept {}
 ```
 
-We also need to add an `unhandled_exception()` method that is called
-if an exception escapes the body of the coroutine. For our purposes we
-can just treat the task coroutine bodies as `noexcept` and call
-`std::terminate()` if this happens.
+我们还需要添加一个`unhandled_exception()`方法，用于处理协程体中逃逸的异常。对于本例，我们可以将任务协程体视为`noexcept`，并在发生异常时调用`std::terminate()`。
 
 ```c++
   void unhandled_exception() noexcept {
@@ -161,30 +137,17 @@ can just treat the task coroutine bodies as `noexcept` and call
   }
 ```
 
-Finally, when the coroutine execution reaches the closing curly brace, we
-want the coroutine to suspend at the final-suspend point and then resume
-its continuation. ie. the coroutine that is awaiting the completion of this
-coroutine.
+最后，当协程执行到右大括号时，我们希望协程在最终挂起点挂起，然后恢复正在等待此协程完成的协程。
 
-To support this, we need a data-member in the promise to hold the `std::coroutine_handle`
-of the continuation. We also need to define the `final_suspend()` method that
-returns an awaitable object that will resume the continuation after the current
-coroutine has suspended at the final-suspend point.
+为了支持这一点，我们需要在 promise 中添加一个数据成员来保存继续执行的 `std::coroutine_handle`。我们还需要定义 `final_suspend()` 方法，该方法返回一个可等待对象，在当前协程在最终挂起点挂起后恢复这个正在等待当前协程的协程的执行。
 
-It's important to delay resuming the continuation until after the current coroutine
-has suspended because the continuation may go on to immediately call the `task`
-destructor which will call `.destroy()` on the coroutine frame.
-The `.destroy()` method is only valid to call on a suspended coroutine and
-so it would be undefined-behaviour to resume the continuation before the current coroutine
-has suspended.
+延迟恢复等待已完成的协程的协程非常重要，直到被等待的协程挂起，因为继续执行可能会立即调用`task`析构函数，该析构函数将在协程帧上调用`.destroy()`方法。
+只有在协程挂起时才能调用`.destroy()`方法，在当前协程挂起之前恢复继续执行将导致未定义行为。
 
-The compiler inserts code to evaluate the statement `co_await promise.final_suspend();`
-at the closing curly brace.
+编译器会在闭合大括号处插入代码来评估语句 `co_await promise.final_suspend();`。
 
-It's important to note that the coroutine is not yet in a
-suspended state when the `final_suspend()` method is invoked.
-We need to wait until the `await_suspend()` method on the returned
-awaitable is called before the coroutine is suspended.
+需要注意的是，在调用 `final_suspend()` 方法时，协程还没有处于挂起状态。
+在其返回的可等待对象的 `await_suspend()` 方法被调用后，协程才会被挂起。
 
 ```c++
   struct final_awaiter {
@@ -209,20 +172,13 @@ awaitable is called before the coroutine is suspended.
 };
 ```
 
-Ok, so that's the complete `promise_type`. The final piece we need to implement
-is the `task::operator co_await()`.
+好的，这就是完整的`promise_type`。我们需要实现的最后一部分是`task::operator co_await()`。
 
-## Implementing `task::operator co_await()`
+## 实现 `task::operator co_await()`
 
-You may remember from the [Understanding operator co_await() post]({{ site.baseurl }}{% link _posts/2017-11-17-understanding-operator-co-await.md %})
-that when evaluating a `co_await` expression, the compiler will generate a call to
-`operator co_await()`, if one is defined, and then the object returned must have the
-`await_ready()`, `await_suspend()` and `await_resume()` methods defined.
+你可能还记得[理解 operator co_await() 文章](https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await)中提到的，当评估 `co_await` 表达式时，如果定义了 `operator co_await()`，编译器将生成对该方法的调用，然后返回的对象必须定义 `await_ready()`、`await_suspend()` 和 `await_resume()` 方法。
 
-When a coroutine awaits a `task` we want the awaiting coroutine to always suspend and
-then, once it has suspended, store the awaiting coroutine's handle in the promise of
-the coroutine we are about to resume and then call `.resume()` on the `task`'s
-`std::coroutine_handle` to start executing the task.
+当协程等待一个 `task` 时，我们希望等待的协程(也就是当前协程)总是挂起，然后一旦它挂起，将等待的协程的句柄存储在即将恢复的协程(也就是新创建的协程)的 promise 中，并调用 `.resume()` 方法来启动执行任务的协程。
 
 Thus the relatively straight forward code:
 ```c++
@@ -257,15 +213,13 @@ task::awaiter task::operator co_await() && noexcept {
 }
 ```
 
-And thus completes the code necessary for a functional `task` type.
+这就是一个功能完整的 `task` 类型所需的全部代码。
 
-You can see the complete set of code in Compiler Explorer here: [https://godbolt.org/z/-Kw6Nf](https://godbolt.org/z/-Kw6Nf)
+您可以在这里查看完整的代码集合：[https://godbolt.org/z/-Kw6Nf](https://godbolt.org/z/-Kw6Nf)
 
-## The stack-overflow problem
+## 栈溢出问题
 
-The limitation of this implementation arises, however, when you start writing loops
-within your coroutines and you `co_await` tasks that can potentially complete synchronously
-within the body of that loop.
+然而，当您在协程中编写循环并且在该循环体内`co_await`可能会同步完成的任务时，这种实现就会出现问题。
 
 For example:
 ```c++
@@ -280,24 +234,17 @@ task loop_synchronously(int count) {
 }
 ```
 
-With the naive `task` implementation described above, the `loop_synchronously()` function
-will (probably) work fine when `count` is 10, 1000, or even 100'000. But there will be a value
-that you can pass that will eventually cause this coroutine to start crashing.
+使用上述简单的`task`实现，`loop_synchronously()`函数在`count`为10、1000甚至100'000时可能会正常工作。但是，当这个值足够大时，该协程最终还是会崩溃。
 
-For example, see: [https://godbolt.org/z/gy5Q8q](https://godbolt.org/z/gy5Q8q) which crashes when `count` is 1'000'000.
+例如，查看：[https://godbolt.org/z/gy5Q8q](https://godbolt.org/z/gy5Q8q)，当`count`为1'000'000时会崩溃。
 
-The reason that this is crashing is because of stack-overflow.
+导致崩溃的原因是栈溢出。
 
-To understand why this code is causing a stack-overflow we need to take a look at
-what is happening when this code is executing. In particular, what is happening to
-the stack-frames.
+为了理解为什么这段代码会导致栈溢出，我们需要查看代码执行时发生了什么。特别是，栈帧发生了什么变化。
 
-When the `loop_synchronously()` coroutine first starts executing it will be because
-some other coroutine `co_await`ed the `task` returned. This will in turn suspend the
-awaiting coroutine and call `task::awaiter::await_suspend()` which will call `resume()`
-on the task's `std::coroutine_handle`.
+`loop_synchronously()`协程将在其他某个协程`co_await`其返回的`task`时开始执行时。这将暂停等待的协程，并调用`task::awaiter::await_suspend()`，该方法将在任务的`std::coroutine_handle`上调用`resume()`。
 
-Thus the stack will look something like this when `loop_synchronously()` starts:
+因此，当`loop_synchronously()`开始时，堆栈大致如下所示：
 ```
            Stack                                                   Heap
 +------------------------------+  <-- top of stack   +--------------------------+
@@ -315,16 +262,13 @@ Thus the stack will look something like this when `loop_synchronously()` starts:
                                                      +--------------------------+
 ```
 
-> Note: When a coroutine function is compiled the compiler typically splits it into
-two parts:
-> 1. the "ramp function" which deals with the construction of the coroutine
-frame, parameter copying, promise construction and producing the return-value, and
-> 2. the "coroutine body"
-which contains the user-authored logic from the body of the coroutine.
+> 注意：当编译协程函数时，编译器通常将其分为两部分：
+> 1. "ramp function" 处理协程帧的构建、参数复制、promise 构造和生成返回值，
+> 2. "coroutine body" 包含协程体中用户编写的逻辑。
 >
-> I use the `$resume` suffix to refer to the "coroutine body" part of the coroutine.
+> 我使用 `$resume` 后缀来指代协程的 "coroutine body" 部分。
 >
-> A later blog post will go into more detail about this split.
+> 后续的博文将详细介绍这种分割方式。
 
 Then when `loop_synchronously()` awaits the `task` returned from `completes_synchronously()`
 the current coroutine is suspended and calls `task::awaiter::await_suspend()`.
