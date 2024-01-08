@@ -1,6 +1,6 @@
-# 协程 007
+# CppReference: Coroutine
 
-翻译自: [cppreference coroutine](https://en.cppreference.com/w/cpp/language/coroutines)
+翻译自: [cppreference coroutine](https://en.cppreference.com/w/cpp/language/coroutines)，可以被认为是 C++ 20 coroutine标准的简化版文档
 
 ## 限制
 
@@ -30,7 +30,7 @@ coroutine handle (`std::coroutine_handle<XXX>` 和 `std::coroutine_handle<>`)，
 
 1. 将所有函数参数复制到协程状态：按值参数被移动或复制，按引用参数保持引用(因此，如果在引用对象的生命周期结束后恢复协程，可能会变成dangling reference)。
 2. 调用 promise 对象的构造函数。如果 promise 类型有一个接受所有协程参数的构造函数，那么将调用该构造函数，参数为复制后的协程参数。否则调用默认构造函数。
-3. 调用 `promise.get_return_object()` 并将结果保留在局部变量中, 该调用的结果将在协程首次挂起时返回给调用者。在此步骤及之前抛出的任何异常都会向调用者传播，而不是放在 promise 中。(`promise.get_return_object()` 的返回值通常是/包含 一个 `std::coroutine_handle<Promise>`, 指向当前coroutine, 这样其他逻辑可以在条件合适时使用 `coroutine_handle<Promise>::resume()`来恢复此协程)。
+3. 调用 `promise.get_return_object()` 并将结果保留在局部变量中, 该调用的结果将在协程首次挂起时返回给调用者。在此步骤及之前抛出的任何异常都会向调用者传播，而不是放在 promise 中。(`promise.get_return_object()` 的返回值类型通常是/包含 一个 `std::coroutine_handle<Promise>`, 指向当前coroutine, 这样其他逻辑可以在条件合适时使用 `coroutine_handle<Promise>::resume()`来恢复此协程)。
 4. 调用 `promise.initial_suspend()` 并 `co_await` 其结果。标准库提供了2个预先定义的 Awaiter `std::suspend_always`和 `std::suspend_never`。典型的 Promise 类型要么返回 `std::suspend_always`，用于延迟启动的协程，要么返回 `std::suspend_never`，用于立即启动的协程。
 5. 当 `co_await promise.initial_suspend()` 恢复时，开始执行协程的主体。
 
