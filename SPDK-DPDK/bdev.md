@@ -347,4 +347,8 @@ struct spdk_io_channel *
 spdk_get_io_channel(void *io_device);
 ```
 
-可以看出, `这里的`
+可以看出, 这里的`void *io_device` (不是`struct io_device`)非常重要。它被用来定位"io_device"。
+
+在 `spdk_io_device_register()`中，此函数会将参数`void *io_device`, `spdk_io_channel_create_cb create_cb`, `spdk_io_channel_destroy_cb destroy_cb`等包装进 `struct io_device`。
+
+而在`spdk_get_io_channel()`中，此函数会根据传入的`io_device`，查找到对应的 `struct io_device`。然后再调用其`create_cb`回调，也就是刚才`spdk_io_device_register()`调用时传入的`create_cb`。
