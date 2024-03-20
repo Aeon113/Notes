@@ -287,3 +287,64 @@ bdev_init_complete(int rc)
 	cb_fn(cb_arg, rc);
 }
 ```
+
+------------
+
+研究 bdev aio module init:
+
+```c
+static struct spdk_bdev_module aio_if = {
+	.name		= "aio",
+	.module_init	= bdev_aio_initialize,
+	.module_fini	= bdev_aio_fini,
+	.get_ctx_size	= bdev_aio_get_ctx_size,
+};
+
+SPDK_BDEV_MODULE_REGISTER(aio, &aio_if)
+```
+
+因此 module init 的起始函数是 `bdev_aio_initialize()`
+
+```c
+static int
+bdev_aio_initialize(void)
+{
+	spdk_io_device_register(&aio_if, bdev_aio_group_create_cb, bdev_aio_group_destroy_cb,
+				sizeof(struct bdev_aio_group_channel), "aio_module");
+
+	return 0;
+}
+```
+
+-----------
+
+- `io_device`：这是一个抽象的概念，代表任何可以进行I/O操作的设备。这可以是一个物理设备（如NVMe设备），也可以是一个虚拟设备（如bdev层的一个虚拟块设备）。`io_device`是通过`spdk_io_device_register`函数注册到SPDK的I/O设备管理系统中的。
+
+- `io_channel`：这是一个抽象的通道，用于在特定的`io_device`和`spdk_thread`之间进行I/O操作。每个`io_channel`都有一个与之关联的`io_device`和`spdk_thread`。`io_channel`是通过`spdk_get_io_channel`函数获取的。
+
+- `reactor`：这是SPDK的事件驱动框架的核心组件。每个`reactor`都运行在一个单独的lcore上，并且管理一个或多个`spdk_thread`。
+
+- `spdk_thread`：这是SPDK的线程抽象。每个`spdk_thread`都运行在一个`reactor`中，并且可以处理一个或多个`io_channel`。
+
+- `lcore`：这是DPDK（SPDK的底层库）的一个概念，代表一个逻辑核心。每个`reactor`都运行在一个单独的lcore上。
+
+这些概念之间的关系可以简单地总结为：每个`reactor`运行在一个lcore上，并管理一个或多个`spdk_thread`。每个`spdk_thread`可以处理一个或多个`io_channel`，每个`io_channel`都与一个`io_device`关联。
+
+---------
+
+注意以下几个函数的签名:
+
+```c
+void
+spdk_io_device_register(void *io_device, spdk_io_channel_create_cb create_cb,
+			spdk_io_channel_destroy_cb destroy_cb, uint32_t ctx_size,
+			const char *name);
+
+void
+spdk_io_device_unregister(void *io_device, spdk_io_device_unregister_cb unregister_cb);
+
+struct spdk_io_channel *
+spdk_get_io_channel(void *io_device);
+```
+
+可以看出, `这里的`
