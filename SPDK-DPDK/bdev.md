@@ -352,3 +352,18 @@ spdk_get_io_channel(void *io_device);
 在 `spdk_io_device_register()`中，此函数会将参数`void *io_device`, `spdk_io_channel_create_cb create_cb`, `spdk_io_channel_destroy_cb destroy_cb`等包装进 `struct io_device`。
 
 而在`spdk_get_io_channel()`中，此函数会根据传入的`io_device`，查找到对应的 `struct io_device`。然后再调用其`create_cb`回调，也就是刚才`spdk_io_device_register()`调用时传入的`create_cb`。
+
+-------------
+
+每个`spdk_thread`都有独立的 `io_channels`队列、各种pollers队列(`active_pollers`, `timed_pollers`, `paused_pollers`), `messages` ring/cache。
+
+(spdk 也支持 interrupt模式，这个没研究过)
+
+-----------------
+
+`spdk_msg`会被放入`spdk_thread`，再由reactor执行；`spdk_event`则会直接由目标reactor执行。
+
+-------------------
+
+下发io请求时，除了需要一个`io_channel`，同时还需要相应块设备的`spdk_bdev_desc`。`spdk_bdev_desc`可以通过 `spdk_bdev_open()`或`spdk_bdev_open_ext()`得到。相应的，还有`spdk_bdev_close()`用来回收一个 `spdk_bdev_desc`。
+
