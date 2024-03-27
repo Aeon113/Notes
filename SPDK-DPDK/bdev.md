@@ -367,3 +367,82 @@ spdk_get_io_channel(void *io_device);
 
 下发io请求时，除了需要一个`io_channel`，同时还需要相应块设备的`spdk_bdev_desc`。`spdk_bdev_desc`可以通过 `spdk_bdev_open()`或`spdk_bdev_open_ext()`得到。相应的，还有`spdk_bdev_close()`用来回收一个 `spdk_bdev_desc`。
 
+----------------------
+
+UCloud XClient SpdkGate 的初始化流程中的主要步骤:
+
+首先启动spdk app, 获取各个配置信息
+
+然后读取restore json文件。
+
+文件读取完成后，再构建各udisk bdev，方法是对自己建立一个rpc 链接，然后发请求`construct_udisk_bdev`。
+
+RPC请求使得某个reactor随后执行函数`spdk_rpc_construct_udisk_bdev`。
+
+```
+# construct udisk bdev 流程
+- spdk_rpc_construct_udisk_bdev(), RPC 参数中带有udisk的extern_id等等信息
+    - create_udisk_bdev()
+      - 分配并初始化 bdev (struct udisk_bdev *), 以及 bdev->bdev (struct spdk_bdev) 中的部分字段，包括iov最大大小、每笔io最大大小等等
+      - 调用 g_api.get_device(), 也就是 xclient::GetUDiskDevice(), 进入login流程。同时传入回调 create_udisk_bdev_continue
+      - 进入 UdiskController线程，开始login流程(异步)。
+- ...
+- Login完成，进入回调cb, 也就是 create_udisk_bdev_continue()。
+  - 向刚才处理rpc的reactor发送spdk_event, 执行create_udisk_bdev_done
+- create_udisk_bdev_done()
+  - 继续设置刚才提到的bdev和bdev_bdev, 包括设备大小等信息
+  - 执行 spdk_io_device_register()，此后各spdk_thread将可以为此设备创建io channel。此函数的参数 create_cb = bdev_udisk_channel_create_cb, destroy_cb = bdev_udisk_channel_destroy_cb
+  - spdk_bdev_register()
+    - 调用 bdev_init() 和 bdev_start()，再次设置 struct spdk_bdev *bdev 中的各字段，并将其加入 TAILQ g_bdev_mgr.bdevs，随后进行 bdev examine。
+  - 执行 bdev_ctx->create_cb，这是udisk module的私有结构的字段，在create_udisk_bdev中被设置，值为 spdk_rpc_construct_udisk_bdev_done
+    - 发送RPC调用结果，表明此bdev创建成功
+```
+
+RPC发送后通过不断`spdk_jsonrpc_client_poll()`或重发 RPC 来确保块设备成功创建。
+
+在restore json 文件中的所有块设备均初始化完成后，开始读取其中的各target记录，来创建target。
+
+这里简介 vhost target 的创建:
+
+```
+# vhost target 创建流程:
+rpc_vhost_create_blk_controller(), RPC 参数中带有相应vhost controller name, 块设备名(就是上方contruct出来的udisk bdev 的设备名, 每个vhost target都关联一个udisk bdev), cpu core mask
+  - spdk_vhost_blk_construct()
+    - 分配，初始化，设置 struct spdk_vhost_blk_dev *bvdev 和 struct spdk_vhost_dev *vdev，调用 spdk_bdev_open_ext() 获取 udisk bdev 的 desc, 并通过 spdk_bdev_desc_get_bdev() 获取相应的 struct spdk_bdev *
+    - vhost_dev_register()
+      - vhost_dev_thread_start()
+        - 为cpu core mask中所提到的每一个core (目前只会传一个core)都创建一个spdk_thread。这些spdk_thread中的每一个都只能运行在指定的一个core上。每个spdk_thread 都对应一个新分配的 struct spdk_vhost_session_group *sgroup。
+        - 设置 vdev->groups，把刚才分配出来的这些 sgroup添加到这个TAILQ中。
+      - vhost_dev_set_coalescing()，不知道干啥的
+      - vhost_register_unix_socket(), 创建相应的socket。SpdkGate和Guest应该是通过这个socket通信
+      - 将当前vdev (struct spdk_vhost_dev *) 添加到 g_vhost_devices
+  - 发送RPC调用结果，表明创建成功
+```
+
+然后是vhost connection 创建流程:
+
+```
+具体怎么创建vhost connection的，我也不知道。
+但下方这个流程一定会走到:
+
+vhost_new_connection_cb()
+  - 获取 struct spdk_vhost_dev *vdev，分配并初始化 struct spdk_vhost_session *vsession，然后将 vsession 加入到 TAILQ vdev->vsessions
+  - 向 g_vhost_init_thread 发送 spdk_msg: spdk_thread_send_msg(g_vhost_init_thread, vhost_register_vsession, vsession)
+  - vhost_session_install_rte_compat_hooks(vsession), 这不知道是干啥的
+
+vhost_register_vsession()
+  - spdk_io_device_register(vsession, vhost_init_thread_session, vhost_fini_thread_session, sizeof(*vsession) + vdev->backend->session_ctx_size, vsession->name); 看起来像是注册了一个 spdk_io_device, 目的还不知道
+  - 之前在 vhost_dev_thread_start()中提到了 vdev->groups 和里面的一批 spdk_thread。这里会给这些spdk_thread发送 spdk_msg: spdk_thread_send_msg(sgroup->thread, vhost_get_dummy_bdev_channel, vdev)
+
+vhost_get_dummy_bdev_channel() 这个函数会在 vdev->groups 中的所有sgroup的spdk_thread中调用
+  - spdk_get_io_channel(vdev->bdev)，获取此vhost controller对应的bdev的io channel。在xclient spdk gate中，这里会调用上方create_udisk_bdev_done()里提到的create_cb，也就是 bdev_udisk_channel_create_cb，但是不会直接调用，具体可以参考上方 spdk_get_io_channel() 的介绍。
+
+bdev_udisk_channel_create_cb()
+  - 主要是UDisk业务逻辑，这里不列举
+```
+
+有了 vhost connection之后，就可以开始收发IO了:
+
+TODO: 接着写
+
+
