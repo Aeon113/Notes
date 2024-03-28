@@ -371,6 +371,8 @@ spdk_get_io_channel(void *io_device);
 
 UCloud XClient SpdkGate 的初始化流程中的主要步骤:
 
+这里的vhost 协商和建链和IO发送流程都是UCloud修改过的
+
 首先启动spdk app, 获取各个配置信息
 
 然后读取restore json文件。
@@ -438,11 +440,64 @@ vhost_get_dummy_bdev_channel() 这个函数会在 vdev->groups 中的所有sgrou
   - spdk_get_io_channel(vdev->bdev)，获取此vhost controller对应的bdev的io channel。在xclient spdk gate中，这里会调用上方create_udisk_bdev_done()里提到的create_cb，也就是 bdev_udisk_channel_create_cb，但是不会直接调用，具体可以参考上方 spdk_get_io_channel() 的介绍。
 
 bdev_udisk_channel_create_cb()
-  - 主要是UDisk业务逻辑，这里不列举
+  - g_api.register_channel(bdev->udisk, ch->unique_id, bdev_udisk_register_channel_continue, channel_ctx), 也就是 xclient::RegisterChannel()
+    - udisk_device->RegisterChannel(unique_id, cnt_cb) (xclient::UDiskDevice::RegisterChannel())
+      - 对当前udisk device 的 所有extenthandle调用 RegisterChannel (eh->RegisterChannel(id, std::bind(&UDiskDevice::RegisterChannelDone, this, unique_id)))
+        - io_submitter_->RegisterChannel(id, done_cb) (这里调用的函数即为 xclient::PollingIOSubmitter::RegisterChannel())
+          - 创建2个ring: submit_ring_[id] = spdk_ring_create(SPDK_RING_TYPE_SP_SC, 8192, SPDK_ENV_SOCKET_ID_ANY); done_ring_[id] = spdk_ring_create(SPDK_RING_TYPE_SP_SC, 8192, SPDK_ENV_SOCKET_ID_ANY); 这里的id是在 UDiskDevice::RegisterChannel()中得到的，依据此函数执行时所在的lcore计算得到: uint32_t id = spdk_env_get_current_core() - spdk_env_get_first_core();
+          - done_cb(), 也就是 void UDiskDevice::RegisterChannelDone()
+            - ctx.completed_cb()
+              - 执行 xclient::RegisterChannel()中的参数 cb, 也就是 bdev_udisk_register_channel_continue()
+              - 向 channel 的 所在spdk_thread发送 spdk_msg: spdk_thread_send_msg(channel_ctx->thread_ctx, bdev_udisk_register_channel_done, ctx);
+    - static_cast<xclient::SpdkArkController*>(g_ark_controller.get())->RegisterChannel(udisk_device, channel_id, cnt_cb)，这和方舟有关，这里不详述
+
+bdev_udisk_register_channel_done()
+  - 在当前channel 注册一个poller: udisk_io_ch->poller = SPDK_POLLER_REGISTER(udisk_io_poll, udisk_io_ch, 0)
+```
+
+然后注意一下 `int vhost_blk_start(struct spdk_vhost_session *vsession)`:
+
+```
+vhost_blk_start() // 应该会调用这个函数
+  - vhost_session_send_event(vsession, vhost_blk_start_cb, vhost_session_start_done, 3, "start session")
+    - 对当前vsession中的每一个spdk_vhost_session_group的spdk_thread, 发送spdk_msg: spdk_thread_send_msg(sgroup->thread, vhost_event_cb, &ev_ctx);
+
+vhost_event_cb()
+  - ctx->cb_fn(ctx->vdev, vsession, ctx->user_ctx); 也就是 vhost_blk_start_cb()
+    - 注册poller, 函数为 vdev_worker: bvsession->requestq_poller = SPDK_POLLER_REGISTER(bvdev->bdev ? vdev_worker : no_bdev_vdev_worker, bvsession, 0)
+
+vdev_worker()
+  - 有时间接这些
 ```
 
 有了 vhost connection之后，就可以开始收发IO了:
 
 TODO: 接着写
 
+-----------------
 
+reactor初始化、启动、工作流程
+
+reactor的初始化和启动:
+
+```
+这里参考spdk 24.01, 且只考虑polling模式而非interrupt模式
+
+spdk_app_start()
+  - spdk_reactors_init()
+    - 初始化 g_spdk_event_mempool, 所有的spdk_event都将通过此mempool 分配 (通过 spdk_event_allocate())
+    - 所有的reactor的管理结构 spdk_reactor 均以 数组的形式存在于 static struct spdk_reactor *g_reactors中。这里分配此数组。reactor的数量等于lcore的数量
+    - 初始化 struct spdk_scheduler_core_info *g_core_infos;
+    - spdk_thread_lib_init_ext()
+      - 设置 g_thread_op_fn 和 g_thread_op_supported_fn, 分别设置为 reactor_thread_op 和 reactor_thread_op_supported。
+    - 对每个lcore执行 reactor_construct()
+      - 初始化此reactor, 主要包括:
+        其lcore和 is_valid flag
+        notify_cpuset (不知道干嘛的)
+        TAILQ threads
+        ring events
+        interrupt机制
+    - 设置 g_scheduling_reactor 为本lcore上的reactor
+
+
+```
