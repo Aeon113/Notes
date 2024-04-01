@@ -92,9 +92,9 @@ bdev_subsystem_initialize()
       └ Register new spdk notification types: "bdev_register" 和 "bdev_unregister"
       └ spdk_iobuf_register_module("bdev")
       └ spdk_io_device_register(&g_bdev_mgr, bdev_mgmt_channel_create,
-				bdev_mgmt_channel_destroy,
-				sizeof(struct spdk_bdev_mgmt_channel),
-				"bdev_mgr"); // 现在不清楚这段代码的意义
+        bdev_mgmt_channel_destroy,
+        sizeof(struct spdk_bdev_mgmt_channel),
+        "bdev_mgr"); // 现在不清楚这段代码的意义
       └ bdev_modules_init();
       └ g_bdev_mgr.module_init_complete = true;
       └ bdev_module_action_complete();
@@ -106,34 +106,34 @@ bdev_subsystem_initialize()
 // lib/bdev/bdev.c
 
 struct spdk_bdev_mgr {
-	struct spdk_mempool *bdev_io_pool; // 
+  struct spdk_mempool *bdev_io_pool; // 
 
-	void *zero_buffer;
+  void *zero_buffer;
 
-	TAILQ_HEAD(bdev_module_list, spdk_bdev_module) bdev_modules;
+  TAILQ_HEAD(bdev_module_list, spdk_bdev_module) bdev_modules;
 
-	struct spdk_bdev_list bdevs;
-	struct bdev_name_tree bdev_names;
+  struct spdk_bdev_list bdevs;
+  struct bdev_name_tree bdev_names;
 
-	bool init_complete;
-	bool module_init_complete;
+  bool init_complete;
+  bool module_init_complete;
 
-	struct spdk_spinlock spinlock;
+  struct spdk_spinlock spinlock;
 
-	TAILQ_HEAD(, spdk_bdev_open_async_ctx) async_bdev_opens;
+  TAILQ_HEAD(, spdk_bdev_open_async_ctx) async_bdev_opens;
 
 #ifdef SPDK_CONFIG_VTUNE
-	__itt_domain	*domain;
+  __itt_domain  *domain;
 #endif
 };
 
 static struct spdk_bdev_mgr g_bdev_mgr = {
-	.bdev_modules = TAILQ_HEAD_INITIALIZER(g_bdev_mgr.bdev_modules),
-	.bdevs = TAILQ_HEAD_INITIALIZER(g_bdev_mgr.bdevs),
-	.bdev_names = RB_INITIALIZER(g_bdev_mgr.bdev_names),
-	.init_complete = false,
-	.module_init_complete = false,
-	.async_bdev_opens = TAILQ_HEAD_INITIALIZER(g_bdev_mgr.async_bdev_opens),
+  .bdev_modules = TAILQ_HEAD_INITIALIZER(g_bdev_mgr.bdev_modules),
+  .bdevs = TAILQ_HEAD_INITIALIZER(g_bdev_mgr.bdevs),
+  .bdev_names = RB_INITIALIZER(g_bdev_mgr.bdev_names),
+  .init_complete = false,
+  .module_init_complete = false,
+  .async_bdev_opens = TAILQ_HEAD_INITIALIZER(g_bdev_mgr.async_bdev_opens),
 };
 ```
 
@@ -191,30 +191,30 @@ I/O 通道的目的是将 I/O 设备的访问局部化到特定的线程，从�
 static int
 bdev_modules_init(void)
 {
-	struct spdk_bdev_module *module;
-	int rc = 0;
+  struct spdk_bdev_module *module;
+  int rc = 0;
 
-	TAILQ_FOREACH(module, &g_bdev_mgr.bdev_modules, internal.tailq) {
-		g_resume_bdev_module = module;
-		if (module->async_init) {
-			spdk_spin_lock(&module->internal.spinlock);
-			module->internal.action_in_progress = 1;
-			spdk_spin_unlock(&module->internal.spinlock);
-		}
-		rc = module->module_init();
-		if (rc != 0) {
-			/* Bump action_in_progress to prevent other modules from completion of modules_init
-			 * Send message to defer application shutdown until resources are cleaned up */
-			spdk_spin_lock(&module->internal.spinlock);
-			module->internal.action_in_progress = 1;
-			spdk_spin_unlock(&module->internal.spinlock);
-			spdk_thread_send_msg(spdk_get_thread(), bdev_init_failed, module);
-			return rc;
-		}
-	}
+  TAILQ_FOREACH(module, &g_bdev_mgr.bdev_modules, internal.tailq) {
+    g_resume_bdev_module = module;
+    if (module->async_init) {
+      spdk_spin_lock(&module->internal.spinlock);
+      module->internal.action_in_progress = 1;
+      spdk_spin_unlock(&module->internal.spinlock);
+    }
+    rc = module->module_init();
+    if (rc != 0) {
+      /* Bump action_in_progress to prevent other modules from completion of modules_init
+       * Send message to defer application shutdown until resources are cleaned up */
+      spdk_spin_lock(&module->internal.spinlock);
+      module->internal.action_in_progress = 1;
+      spdk_spin_unlock(&module->internal.spinlock);
+      spdk_thread_send_msg(spdk_get_thread(), bdev_init_failed, module);
+      return rc;
+    }
+  }
 
-	g_resume_bdev_module = NULL;
-	return 0;
+  g_resume_bdev_module = NULL;
+  return 0;
 }
 ```
 
@@ -222,69 +222,69 @@ bdev_modules_init(void)
 static void
 bdev_module_action_complete(void)
 {
-	/*
-	 * Don't finish bdev subsystem initialization if
-	 * module pre-initialization is still in progress, or
-	 * the subsystem been already initialized.
-	 */
-	if (!g_bdev_mgr.module_init_complete || g_bdev_mgr.init_complete) {
-		return;
-	}
+  /*
+   * Don't finish bdev subsystem initialization if
+   * module pre-initialization is still in progress, or
+   * the subsystem been already initialized.
+   */
+  if (!g_bdev_mgr.module_init_complete || g_bdev_mgr.init_complete) {
+    return;
+  }
 
-	/*
-	 * Check all bdev modules for inits/examinations in progress. If any
-	 * exist, return immediately since we cannot finish bdev subsystem
-	 * initialization until all are completed.
-	 */
-	if (!bdev_module_all_actions_completed()) {
-		return;
-	}
+  /*
+   * Check all bdev modules for inits/examinations in progress. If any
+   * exist, return immediately since we cannot finish bdev subsystem
+   * initialization until all are completed.
+   */
+  if (!bdev_module_all_actions_completed()) {
+    return;
+  }
 
-	/*
-	 * Modules already finished initialization - now that all
-	 * the bdev modules have finished their asynchronous I/O
-	 * processing, the entire bdev layer can be marked as complete.
-	 */
-	bdev_init_complete(0);
+  /*
+   * Modules already finished initialization - now that all
+   * the bdev modules have finished their asynchronous I/O
+   * processing, the entire bdev layer can be marked as complete.
+   */
+  bdev_init_complete(0);
 }
 
 static bool
 bdev_module_all_actions_completed(void)
 {
-	struct spdk_bdev_module *m;
+  struct spdk_bdev_module *m;
 
-	TAILQ_FOREACH(m, &g_bdev_mgr.bdev_modules, internal.tailq) {
-		if (m->internal.action_in_progress > 0) {
-			return false;
-		}
-	}
-	return true;
+  TAILQ_FOREACH(m, &g_bdev_mgr.bdev_modules, internal.tailq) {
+    if (m->internal.action_in_progress > 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 static void
 bdev_init_complete(int rc)
 {
-	spdk_bdev_init_cb cb_fn = g_init_cb_fn;
-	void *cb_arg = g_init_cb_arg;
-	struct spdk_bdev_module *m;
+  spdk_bdev_init_cb cb_fn = g_init_cb_fn;
+  void *cb_arg = g_init_cb_arg;
+  struct spdk_bdev_module *m;
 
-	g_bdev_mgr.init_complete = true;
-	g_init_cb_fn = NULL;
-	g_init_cb_arg = NULL;
+  g_bdev_mgr.init_complete = true;
+  g_init_cb_fn = NULL;
+  g_init_cb_arg = NULL;
 
-	/*
-	 * For modules that need to know when subsystem init is complete,
-	 * inform them now.
-	 */
-	if (rc == 0) {
-		TAILQ_FOREACH(m, &g_bdev_mgr.bdev_modules, internal.tailq) {
-			if (m->init_complete) {
-				m->init_complete();
-			}
-		}
-	}
+  /*
+   * For modules that need to know when subsystem init is complete,
+   * inform them now.
+   */
+  if (rc == 0) {
+    TAILQ_FOREACH(m, &g_bdev_mgr.bdev_modules, internal.tailq) {
+      if (m->init_complete) {
+        m->init_complete();
+      }
+    }
+  }
 
-	cb_fn(cb_arg, rc);
+  cb_fn(cb_arg, rc);
 }
 ```
 
@@ -294,10 +294,10 @@ bdev_init_complete(int rc)
 
 ```c
 static struct spdk_bdev_module aio_if = {
-	.name		= "aio",
-	.module_init	= bdev_aio_initialize,
-	.module_fini	= bdev_aio_fini,
-	.get_ctx_size	= bdev_aio_get_ctx_size,
+  .name    = "aio",
+  .module_init  = bdev_aio_initialize,
+  .module_fini  = bdev_aio_fini,
+  .get_ctx_size  = bdev_aio_get_ctx_size,
 };
 
 SPDK_BDEV_MODULE_REGISTER(aio, &aio_if)
@@ -309,10 +309,10 @@ SPDK_BDEV_MODULE_REGISTER(aio, &aio_if)
 static int
 bdev_aio_initialize(void)
 {
-	spdk_io_device_register(&aio_if, bdev_aio_group_create_cb, bdev_aio_group_destroy_cb,
-				sizeof(struct bdev_aio_group_channel), "aio_module");
+  spdk_io_device_register(&aio_if, bdev_aio_group_create_cb, bdev_aio_group_destroy_cb,
+        sizeof(struct bdev_aio_group_channel), "aio_module");
 
-	return 0;
+  return 0;
 }
 ```
 
@@ -337,8 +337,8 @@ bdev_aio_initialize(void)
 ```c
 void
 spdk_io_device_register(void *io_device, spdk_io_channel_create_cb create_cb,
-			spdk_io_channel_destroy_cb destroy_cb, uint32_t ctx_size,
-			const char *name);
+      spdk_io_channel_destroy_cb destroy_cb, uint32_t ctx_size,
+      const char *name);
 
 void
 spdk_io_device_unregister(void *io_device, spdk_io_device_unregister_cb unregister_cb);
@@ -481,23 +481,210 @@ reactor初始化、启动、工作流程
 reactor的初始化和启动:
 
 ```
-这里参考spdk 24.01, 且只考虑polling模式而非interrupt模式
+这里参考spdk 21.10, 且只考虑polling模式而非interrupt模式
 
 spdk_app_start()
-  - spdk_reactors_init()
-    - 初始化 g_spdk_event_mempool, 所有的spdk_event都将通过此mempool 分配 (通过 spdk_event_allocate())
-    - 所有的reactor的管理结构 spdk_reactor 均以 数组的形式存在于 static struct spdk_reactor *g_reactors中。这里分配此数组。reactor的数量等于lcore的数量
-    - 初始化 struct spdk_scheduler_core_info *g_core_infos;
-    - spdk_thread_lib_init_ext()
-      - 设置 g_thread_op_fn 和 g_thread_op_supported_fn, 分别设置为 reactor_thread_op 和 reactor_thread_op_supported。
-    - 对每个lcore执行 reactor_construct()
-      - 初始化此reactor, 主要包括:
-        其lcore和 is_valid flag
-        notify_cpuset (不知道干嘛的)
-        TAILQ threads
-        ring events
-        interrupt机制
-    - 设置 g_scheduling_reactor 为本lcore上的reactor
+    - spdk_reactors_init()
+        - 初始化 g_spdk_event_mempool, 所有的spdk_event都将通过此mempool 分配 (通过 spdk_event_allocate())
+        - 所有的reactor的管理结构 spdk_reactor 均以 数组的形式存在于 static struct spdk_reactor *g_reactors中。这里分配此数组。reactor的数量等于lcore的数量
+        - 初始化 struct spdk_scheduler_core_info *g_core_infos;
+        - spdk_thread_lib_init_ext()
+            - 设置 g_thread_op_fn 和 g_thread_op_supported_fn, 分别设置为 reactor_thread_op 和 reactor_thread_op_supported。
+        - 对每个lcore执行 reactor_construct()
+            - 初始化此reactor, 主要包括:
+              其lcore和 is_valid flag
+              notify_cpuset (不知道干嘛的)
+              TAILQ threads
+              ring events
+              interrupt机制
+        - 设置 g_scheduling_reactor 为本lcore上的reactor
+    - 创建一个g_app_thread: g_app_thread = spdk_thread_create("app_thread", &tmp_cpumask)
+    - 向 g_app_thread 发送 spdk_msg: spdk_thread_send_msg(g_app_thread, bootstrap_fn, NULL)
+    - spdk_reactors_start()
+        - 现在除了当前core外的所有lcore上跑reactor_run函数: spdk_env_thread_launch_pinned(reactor->lcore, reactor_run, reactor)
+        - 在当前core上也跑 reactor_run: reactor_run(reactor), reactor的主要逻辑均在这个reactor_run里
+        - 执行到这里，就代表本lcore上的reactor退出了，此时等待其他lcore上的reactor退出: spdk_env_thread_wait_all()
 
-
+reactor_run()
+    - while 1 循环
+        - _reactor_run()
+            - event_queue_run_batch()
+                - 从当前reactor的event ring中取出数个event: count = spdk_ring_dequeue(reactor->events, events, SPDK_EVENT_BATCH_SIZE); // 最多取8个events
+                - 从当前reactor的spdk_thread队列中取出第一个spdk_thread，在这个spdk_thread上运行这些event: (注意是先取出 spdk_lw_thread, 再转换为 spdk_thread; 如果取不到spdk_lw_thread, 也就是说当前reactor上没有spdk_thread, 就使用null, 具体看下方代码)
+                      /* Execute the **events**. There are still some remaining events
+                      * that must occur on an SPDK thread. To accomodate those, try to
+                      * run them on the first thread in the list, if it exists. */
+                      lw_thread = TAILQ_FIRST(&reactor->threads);
+                      if (lw_thread) {
+                        thread = spdk_thread_get_from_ctx(lw_thread);
+                      } else {
+                        thread = NULL;
+                      }
+                   
+                      for (i = 0; i < count; i++) {
+                        struct spdk_event *event = events[i];
+                   
+                        assert(event != NULL);
+                        spdk_set_thread(thread);
+                        event->fn(event->arg1, event->arg2);
+                        spdk_set_thread(NULL);
+                      }
+                - 把刚才执行完的这些struct spdk_event *，放回 g_spdk_event_mempool
+            - 如果当前reactor的 TAILQ threads (reactor->threads)里没有spdk_thread, 则更新reactor->idle_tsc和reactor->tsc_last，然后直接退出_reactor_run()
+            - 遍历当前reactor的spdk_thread中的所有threads: TAILQ_FOREACH_SAFE(lw_thread, &reactor->threads, link, tmp)
+                - 对此spdk_thread执行spdk_thread_poll: rc = spdk_thread_poll(thread, 0, reactor->tsc_last) // 实际上 spdk_thread_poll()的逻辑比下述复杂的多，但这里只关注polling模式的运行方式，所以可以简化
+                    - 对此spdk_thread执行thread_poll():
+                        - 如果当前spdk_thread有critical_msg, 则执行critical_msg
+                            if (spdk_unlikely(critical_msg != NULL)) {
+                              critical_msg(NULL);
+                              thread->critical_msg = NULL;
+                              rc = 1;
+                            }
+                        - msg_count = msg_queue_run_batch(thread, max_msgs)
+                            - 执行当前spdk_thread的message ring 中的各message。 // 可能不能全部执行完
+                            - 将执行完的 message (struct spdk_msg *) 放回 g_spdk_msg_mempool
+                        - 遍历当前spdk_thread的active pollers: TAILQ_FOREACH_REVERSE_SAFE(poller, &thread->active_pollers, active_pollers_head, tailq, tmp)
+                            - poller_rc = thread_execute_poller(thread, poller)
+                                - 代码大致如下:
+                                    static inline int
+                                    thread_execute_poller(struct spdk_thread *thread, struct spdk_poller *poller)
+                                    {
+                                    	int rc;
+                                    
+                                    	switch (poller->state) {
+                                    	case SPDK_POLLER_STATE_UNREGISTERED:
+                                    		TAILQ_REMOVE(&thread->active_pollers, poller, tailq);
+                                    		free(poller);
+                                    		return 0;
+                                    	case SPDK_POLLER_STATE_PAUSING:
+                                    		TAILQ_REMOVE(&thread->active_pollers, poller, tailq);
+                                    		TAILQ_INSERT_TAIL(&thread->paused_pollers, poller, tailq);
+                                    		poller->state = SPDK_POLLER_STATE_PAUSED;
+                                    		return 0;
+                                    	case SPDK_POLLER_STATE_WAITING:
+                                    		break;
+                                    	default:
+                                    		assert(false);
+                                    		break;
+                                    	}
+                                    
+                                    	poller->state = SPDK_POLLER_STATE_RUNNING;
+                                    	rc = poller->fn(poller->arg);
+                                    
+                                    	poller->run_count++;
+                                    	if (rc > 0) {
+                                    		poller->busy_count++;
+                                    	}
+                                    
+                                    #ifdef DEBUG
+                                    	if (rc == -1) {
+                                    		SPDK_DEBUGLOG(thread, "Poller %s returned -1\n", poller->name);
+                                    	}
+                                    #endif
+                                    
+                                    	switch (poller->state) {
+                                    	case SPDK_POLLER_STATE_UNREGISTERED:
+                                    		TAILQ_REMOVE(&thread->active_pollers, poller, tailq);
+                                    		free(poller);
+                                    		break;
+                                    	case SPDK_POLLER_STATE_PAUSING:
+                                    		TAILQ_REMOVE(&thread->active_pollers, poller, tailq);
+                                    		TAILQ_INSERT_TAIL(&thread->paused_pollers, poller, tailq);
+                                    		poller->state = SPDK_POLLER_STATE_PAUSED;
+                                    		break;
+                                    	case SPDK_POLLER_STATE_PAUSED:
+                                    	case SPDK_POLLER_STATE_WAITING:
+                                    		break;
+                                    	case SPDK_POLLER_STATE_RUNNING:
+                                    		poller->state = SPDK_POLLER_STATE_WAITING;
+                                    		break;
+                                    	default:
+                                    		assert(false);
+                                    		break;
+                                    	}
+                                    
+                                    	return rc;
+                                    }
+                                - 再次检查各poller的状态，并依照状态来进行各类操作
+                        - 依序遍历当前spdk_thread的所有timed_pollers (timed_pollers都被存在一个rb tree 里, key是其下一次执行的时间), 直到遇到第一个还未到执行时间的timed_poller
+                            - 将此poller从RB TREE 里移出
+                            - timer_rc = thread_execute_timed_poller(thread, poller, now);
+                                - 先根据poller状态判断是否执行，是否回收此poller。执行完成后，再次根据poller状态判断是否需重新将此poller插入timed_poller队列，或者直接释放等。代码如下:
+                                    static inline int
+                                    thread_execute_timed_poller(struct spdk_thread *thread, struct spdk_poller *poller,
+                                    			    uint64_t now)
+                                    {
+                                    	int rc;
+                                    
+                                    	switch (poller->state) {
+                                    	case SPDK_POLLER_STATE_UNREGISTERED:
+                                    		free(poller);
+                                    		return 0;
+                                    	case SPDK_POLLER_STATE_PAUSING:
+                                    		TAILQ_INSERT_TAIL(&thread->paused_pollers, poller, tailq);
+                                    		poller->state = SPDK_POLLER_STATE_PAUSED;
+                                    		return 0;
+                                    	case SPDK_POLLER_STATE_WAITING:
+                                    		break;
+                                    	default:
+                                    		assert(false);
+                                    		break;
+                                    	}
+                                    
+                                    	poller->state = SPDK_POLLER_STATE_RUNNING;
+                                    	rc = poller->fn(poller->arg);
+                                    
+                                    	poller->run_count++;
+                                    	if (rc > 0) {
+                                    		poller->busy_count++;
+                                    	}
+                                    
+                                    #ifdef DEBUG
+                                    	if (rc == -1) {
+                                    		SPDK_DEBUGLOG(thread, "Timed poller %s returned -1\n", poller->name);
+                                    	}
+                                    #endif
+                                    
+                                    	switch (poller->state) {
+                                    	case SPDK_POLLER_STATE_UNREGISTERED:
+                                    		free(poller);
+                                    		break;
+                                    	case SPDK_POLLER_STATE_PAUSING:
+                                    		TAILQ_INSERT_TAIL(&thread->paused_pollers, poller, tailq);
+                                    		poller->state = SPDK_POLLER_STATE_PAUSED;
+                                    		break;
+                                    	case SPDK_POLLER_STATE_PAUSED:
+                                    		break;
+                                    	case SPDK_POLLER_STATE_RUNNING:
+                                    		poller->state = SPDK_POLLER_STATE_WAITING;
+                                    	/* fallthrough */
+                                    	case SPDK_POLLER_STATE_WAITING:
+                                    		poller_insert_timer(thread, poller, now);
+                                    		break;
+                                    	default:
+                                    		assert(false);
+                                    		break;
+                                    	}
+                                    
+                                    	return rc;
+                                    }
+                    - if (spdk_unlikely(thread->state == SPDK_THREAD_STATE_EXITING)) { thread_exit(thread, now); }
+                        - 这个函数 (thread_exit())主要是释放各种资源, 这个以后再讲
+                    - thread_update_stats() 更新当前spdk_thread的stats, 其实就是 busy_tsc 和 idle_tsc
+                - 更新当前reactor的 idle_tsc, busy_tsc 和 tsc_last
+                - reactor_post_process_lw_thread(): 回收当前reactor上已经终止的spdk_thread, 根据 lw_thread->resched 重新调度各 spdk_thread (resched 标记由reactor_run()的后续逻辑标记，或者由用户手动修改目标spdk_thread的coremask来更新)
+        - 如果当前reactor是 scheduling reactor, 且达到了 g_scheduler_period，且reschedule工作并非正在运行，就调用_reactors_scheduler_gather_metrics()
+          具体代码如下：
+            if(spdk_unlikely(g_scheduler_period > 0 &&
+                  (reactor->tsc_last - last_sched) > g_scheduler_period &&
+                  reactor == g_scheduling_reactor &&
+                  !g_scheduling_in_progress)) {
+              last_sched = reactor->tsc_last;
+              g_scheduling_in_progress = true;
+              _reactors_scheduler_gather_metrics(NULL, NULL);
+            }
+        - if (g_reactor_state != SPDK_REACTOR_STATE_RUNNING) { break; }
+        - 回到上方继续循环
+    - 执行到这里, 就表示此reactor需要退出了。首先对当前reactor上的各种spdk_thread执行 spdk_thread_exit(thread)
+    - 回收此reactor上的所有SPDK_THREAD_STATE_EXITED状态的spdk_thread。如果有不处于这个状态的spdk_thread, 就多次对它执行 spdk_thread_poll(), 直到它变成SPDK_THREAD_STATE_EXITED状态, 然后再回收掉。
 ```
